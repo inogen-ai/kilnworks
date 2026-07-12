@@ -1,0 +1,24 @@
+# .dockerignore
+.git
+.venv
+.superpowers
+.pytest_cache
+.ruff_cache
+data
+docs
+tests
+examples
+*.md
+!README.md
+.env
+.env.*
+*.env
+**/.env
+**/.env.*
+**/*.env
+Dockerfile
+compose.yaml
+.github
+.gitignore
+web/node_modules
+web/dist

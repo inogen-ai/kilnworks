@@ -1,0 +1,16 @@
+# gitleaks config. The only matches in this repo are a single hardcoded test secret
+# used across the auth/OIDC test fixtures — an obvious non-secret placeholder, never a
+# real credential. Allowlisted here so `gitleaks detect` reports clean and any genuine
+# future leak stands out immediately.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Hardcoded test secret_key used only in the test suite (not a real credential)"
+regexTarget = "match"
+regexes = [
+    '''test-secret-0123456789abcdef-0123456789abcdef''',
+]
+paths = [
+    '''tests/.*''',
+]

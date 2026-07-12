@@ -1,0 +1,3 @@
+{"question": "The alpha test kiln reaches precisely eleven hundred degrees on Mondays.", "expected_sources": ["alpha"]}
+{"question": "The beta glaze bucket holds exactly forty litres of celadon mixture.", "expected_sources": ["beta"]}
+{"question": "The gamma shelf carries bisqueware for nine days before glazing.", "expected_sources": ["gamma"]}

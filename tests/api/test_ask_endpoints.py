@@ -1,0 +1,91 @@
+from kilnworks.adapters.embedders.fake import FakeEmbedder
+from kilnworks.adapters.pgvector_store import PgVectorStore
+from kilnworks.core.models import Chunk, Document
+from kilnworks.db.connection import connect
+
+from tests.api.test_auth_endpoints import _register
+
+
+def _token(client, email="mike@example.com", password="hunter2"):
+    return client.post(
+        "/auth/token", json={"email": email, "password": password}
+    ).json()["access_token"]
+
+
+def _seed_doc(api_settings, text, acl_tags):
+    conn = connect(api_settings.database_url)
+    store, embedder = PgVectorStore(conn), FakeEmbedder()
+    doc = Document(source_uri=f"file:///{text[:8]}.md", title=text[:8], text=text,
+                   acl_tags=acl_tags)
+    doc_id = store.upsert_document(doc)
+    chunk = Chunk(document_id=doc_id, ordinal=0, text=text, acl_tags=acl_tags)
+    store.upsert_chunks([chunk], embedder.embed([text]).vectors)
+    store.mark_document(doc_id, "ready")
+    conn.close()
+
+
+def test_endpoints_require_auth(client):
+    assert client.get("/documents").status_code == 401
+    assert client.post("/ask", json={"question": "q"}).status_code == 401
+    bad = {"Authorization": "Bearer garbage"}
+    assert client.get("/documents", headers=bad).status_code == 401
+
+
+def test_documents_lists_status(client, api_settings):
+    _register(api_settings)
+    _seed_doc(api_settings, "public knowledge", ["public"])
+    headers = {"Authorization": f"Bearer {_token(client)}"}
+    response = client.get("/documents", headers=headers)
+    assert response.status_code == 200
+    docs = response.json()
+    assert len(docs) == 1 and docs[0]["status"] == "ready"
+
+
+def test_documents_filters_by_acl(client, api_settings):
+    _register(api_settings, email="pub@example.com", principals=("public",))
+    _register(api_settings, email="hr@example.com", principals=("public", "hr"))
+    _seed_doc(api_settings, "public knowledge", ["public"])
+    _seed_doc(api_settings, "salary bands 2026", ["hr"])
+    pub_headers = {"Authorization": f"Bearer {_token(client, email='pub@example.com')}"}
+    hr_headers = {"Authorization": f"Bearer {_token(client, email='hr@example.com')}"}
+    pub_docs = client.get("/documents", headers=pub_headers).json()
+    hr_docs = client.get("/documents", headers=hr_headers).json()
+    assert [d["title"] for d in pub_docs] == ["public k"]
+    assert {d["title"] for d in hr_docs} == {"public k", "salary b"}
+
+
+def test_ask_enforces_principals_from_token(client, api_settings):
+    _register(api_settings, email="pub@example.com", principals=("public",))
+    _register(api_settings, email="hr@example.com", principals=("public", "hr"))
+    _seed_doc(api_settings, "salary bands 2026", ["hr"])
+    pub_headers = {"Authorization": f"Bearer {_token(client, email='pub@example.com')}"}
+    hr_headers = {"Authorization": f"Bearer {_token(client, email='hr@example.com')}"}
+    body = {"question": "salary bands 2026"}
+    pub_answer = client.post("/ask", json=body, headers=pub_headers).json()
+    hr_answer = client.post("/ask", json=body, headers=hr_headers).json()
+    assert pub_answer["citations"] == []          # NO_ANSWER path: nothing visible
+    assert len(hr_answer["citations"]) == 1        # FakeLLM cites [1]
+
+
+def test_ask_rejects_invalid_limit(client, api_settings):
+    _register(api_settings)
+    headers = {"Authorization": f"Bearer {_token(client)}"}
+    assert client.post(
+        "/ask", json={"question": "q", "limit": -1}, headers=headers
+    ).status_code == 422
+    assert client.post(
+        "/ask", json={"question": "q", "limit": 51}, headers=headers
+    ).status_code == 422
+
+
+def test_ask_attributes_cost_to_user(client, api_settings):
+    user = _register(api_settings)
+    _seed_doc(api_settings, "public knowledge", ["public"])
+    headers = {"Authorization": f"Bearer {_token(client)}"}
+    client.post("/ask", json={"question": "public knowledge"}, headers=headers)
+    conn = connect(api_settings.database_url)
+    rows = conn.execute(
+        "SELECT DISTINCT user_id FROM cost_events WHERE context = 'query'"
+    ).fetchall()
+    conn.close()
+    assert rows == [(str(user.id),)]

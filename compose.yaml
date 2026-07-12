@@ -1,0 +1,83 @@
+# compose.yaml
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: kilnworks
+      POSTGRES_PASSWORD: kilnworks
+      POSTGRES_DB: kilnworks
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kilnworks -d kilnworks"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  init:
+    build: .
+    command: ["init-db"]
+    environment: &kilnworks-env
+      KILNWORKS_DATABASE_URL: postgresql://kilnworks:kilnworks@db:5432/kilnworks
+      KILNWORKS_SECRET_KEY: ${KILNWORKS_SECRET_KEY:-kilnworks-dev-secret-change-me-0123456789}
+      KILNWORKS_OPENAI_API_KEY: ${KILNWORKS_OPENAI_API_KEY:-}
+      KILNWORKS_FAKE_PROVIDERS: ${KILNWORKS_FAKE_PROVIDERS:-false}
+      KILNWORKS_CHAT_PROVIDER: ${KILNWORKS_CHAT_PROVIDER:-openai}
+      KILNWORKS_EMBEDDING_PROVIDER: ${KILNWORKS_EMBEDDING_PROVIDER:-openai}
+      KILNWORKS_ANTHROPIC_API_KEY: ${KILNWORKS_ANTHROPIC_API_KEY:-}
+      KILNWORKS_ANTHROPIC_MODEL: ${KILNWORKS_ANTHROPIC_MODEL:-claude-opus-4-8}
+      KILNWORKS_OLLAMA_BASE_URL: ${KILNWORKS_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      KILNWORKS_OLLAMA_CHAT_MODEL: ${KILNWORKS_OLLAMA_CHAT_MODEL:-llama3.2}
+      KILNWORKS_OLLAMA_EMBEDDING_MODEL: ${KILNWORKS_OLLAMA_EMBEDDING_MODEL:-nomic-embed-text}
+      KILNWORKS_EMBEDDING_DIMENSIONS: ${KILNWORKS_EMBEDDING_DIMENSIONS:-1536}
+      KILNWORKS_OLLAMA_NUM_CTX: ${KILNWORKS_OLLAMA_NUM_CTX:-8192}
+      KILNWORKS_OLLAMA_TIMEOUT_SECONDS: ${KILNWORKS_OLLAMA_TIMEOUT_SECONDS:-300.0}
+      KILNWORKS_CHAT_MODEL: ${KILNWORKS_CHAT_MODEL:-gpt-4o-mini}
+      KILNWORKS_EMBEDDING_MODEL: ${KILNWORKS_EMBEDDING_MODEL:-text-embedding-3-small}
+      KILNWORKS_ANTHROPIC_MAX_TOKENS: ${KILNWORKS_ANTHROPIC_MAX_TOKENS:-2048}
+      KILNWORKS_JOB_LEASE_SECONDS: ${KILNWORKS_JOB_LEASE_SECONDS:-420}
+      KILNWORKS_JOB_TIMEOUT_SECONDS: ${KILNWORKS_JOB_TIMEOUT_SECONDS:-300}
+      KILNWORKS_API_HOST: 0.0.0.0
+      KILNWORKS_DATA_DIR: /data
+      KILNWORKS_OIDC_ISSUER: ${KILNWORKS_OIDC_ISSUER:-}
+      KILNWORKS_OIDC_CLIENT_ID: ${KILNWORKS_OIDC_CLIENT_ID:-}
+      KILNWORKS_OIDC_CLIENT_SECRET: ${KILNWORKS_OIDC_CLIENT_SECRET:-}
+      KILNWORKS_OIDC_GROUPS_CLAIM: ${KILNWORKS_OIDC_GROUPS_CLAIM:-groups}
+      KILNWORKS_OIDC_SCOPES: "${KILNWORKS_OIDC_SCOPES:-openid email profile}"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    build: .
+    command: ["serve"]
+    environment: *kilnworks-env
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - app-data:/data
+    restart: unless-stopped
+    depends_on:
+      init:
+        condition: service_completed_successfully
+
+  # Lease-based reclaim (KILNWORKS_JOB_LEASE_SECONDS) is multi-worker safe; see docs/limitations.md
+  worker:
+    build: .
+    command: ["worker"]
+    environment: *kilnworks-env
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    volumes:
+      - app-data:/data
+    restart: unless-stopped
+    depends_on:
+      init:
+        condition: service_completed_successfully
+
+volumes:
+  db-data:
+  app-data:
