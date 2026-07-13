@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     transcription_model: str = "whisper-1"
     local_whisper_model: str = "base"
     max_media_bytes: int = 104_857_600
+    connectors_config: str = ""
+    connector_timeout: float = 8.0
+    connector_result_limit: int = 5
 
     @property
     def oidc_enabled(self) -> bool:
