@@ -32,6 +32,10 @@ dependencies = [
 # adapters/media/transcribe_local.py so the base install stays light and offline
 # text/table ingestion never pulls in ctranslate2/onnxruntime.
 local-whisper = ["faster-whisper>=1.0"]
+# Only needed to build/run real MCP stdio connectors (adapters/connectors/mcp_stdio.py).
+# The base install and core/ never import mcp; this extra is required only when
+# connectors are configured.
+connectors = ["mcp>=1.28"]
 
 [project.scripts]
 kilnworks = "kilnworks.cli:app"

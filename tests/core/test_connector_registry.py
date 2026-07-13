@@ -9,11 +9,9 @@ def _fake_factory(**calls_log):
     """Returns a factory that records every call and builds FakeConnectors."""
     calls = calls_log.setdefault("calls", [])
 
-    def factory(name, command, env, search_limit):
-        calls.append(
-            {"name": name, "command": command, "env": env, "search_limit": search_limit}
-        )
-        return FakeConnector(name=name)
+    def factory(entry):
+        calls.append(entry)
+        return FakeConnector(name=entry["name"])
 
     factory.calls = calls
     return factory
@@ -81,14 +79,45 @@ def test_from_config_builds_connectors_via_factory(tmp_path):
         "env": {"SFDC_MCP_AUTH": "device_code"},
         "search_limit": 3,
     }
+    # Defaults (e.g. search_limit) are the connector's concern now, not the registry's:
+    # the factory receives the raw entry (minus allowed_groups) untouched.
     assert factory.calls[1] == {
         "name": "wiki",
         "command": ["wiki-mcp-server", "--flag"],
         "env": {},
-        "search_limit": 5,
     }
     assert registry.get("salesforce") is not None
     assert registry.get("wiki") is not None
+
+
+def test_connector_specific_fields_flow_through_to_factory(tmp_path):
+    config_path = tmp_path / "connectors.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "connectors": [
+                    {
+                        "name": "hubspot",
+                        "command": ["hubspot-mcp-server"],
+                        "env": {},
+                        "allowed_groups": ["sales"],
+                        "search_tool": "search_records",
+                        "query_arg": "term",
+                        "extra_args": {"object_type": "contacts"},
+                    }
+                ]
+            }
+        )
+    )
+    factory = _fake_factory()
+
+    ConnectorRegistry.from_config(str(config_path), factory)
+
+    entry = factory.calls[0]
+    assert entry["search_tool"] == "search_records"
+    assert entry["query_arg"] == "term"
+    assert entry["extra_args"] == {"object_type": "contacts"}
+    assert "allowed_groups" not in entry
 
 
 def test_env_vars_are_expanded(tmp_path, monkeypatch):

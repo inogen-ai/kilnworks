@@ -14,9 +14,10 @@ from collections.abc import Callable, Sequence
 from kilnworks.core.models import CONNECTOR_STATUS_NEEDS_LOGIN
 from kilnworks.core.ports import Connector
 
-DEFAULT_SEARCH_LIMIT = 5
-
-ConnectorFactory = Callable[[str, list[str], dict[str, str], int], Connector]
+# The factory receives the full parsed config entry (minus `allowed_groups`, which the
+# registry keeps), with `env` values expanded. It knows how to build a real connector
+# (e.g. MCPStdioConnector) and is injected so this module never imports `adapters`/`mcp`.
+ConnectorFactory = Callable[[dict], Connector]
 
 
 class ConnectorRegistry:
@@ -33,13 +34,14 @@ class ConnectorRegistry:
             config = json.load(f)
 
         entries: list[tuple[Connector, Sequence[str]]] = []
-        for entry in config.get("connectors", []):
-            name = entry["name"]
-            command = entry["command"]
-            env = {key: os.path.expandvars(value) for key, value in entry.get("env", {}).items()}
-            search_limit = entry.get("search_limit", DEFAULT_SEARCH_LIMIT)
-            allowed_groups = entry["allowed_groups"]
-            connector = factory(name, command, env, search_limit)
+        for raw in config.get("connectors", []):
+            entry = dict(raw)
+            allowed_groups = entry.pop("allowed_groups")
+            if "env" in entry:
+                entry["env"] = {
+                    key: os.path.expandvars(value) for key, value in entry["env"].items()
+                }
+            connector = factory(entry)
             entries.append((connector, allowed_groups))
 
         return cls(entries)
