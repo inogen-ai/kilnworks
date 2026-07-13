@@ -91,6 +91,10 @@ class Connector(Protocol):
     def status(self) -> str: ...
 
 
+class ConnectorRegistry(Protocol):
+    def allowed_for(self, principals: Sequence[str]) -> list[Connector]: ...
+
+
 class CostRecorder(Protocol):
     def record_cost(
         self,

@@ -2,10 +2,11 @@ from uuid import uuid4
 
 import pytest
 
+from kilnworks.adapters.connectors.fake import FakeConnector
 from kilnworks.adapters.embedders.fake import FakeEmbedder
 from kilnworks.adapters.llm.fake import FakeLLM
 from kilnworks.core.errors import ProviderError
-from kilnworks.core.models import RetrievedChunk
+from kilnworks.core.models import ConnectorResult, RetrievedChunk
 from kilnworks.core.query import NO_ANSWER_TEXT, QueryService
 
 
@@ -189,3 +190,115 @@ def test_ask_stream_forwards_source_ids_and_connectors_to_retrieve():
     service = QueryService(FakeEmbedder(), index, FakeLLM())
     list(service.ask_stream("q", source_ids=[source_a], connectors=["slack"]))
     assert index.searches == [(("public",), 8, [source_a])]
+
+
+class FakeRegistry:
+    """Tiny fake for the C3 `connector_registry` interface: `allowed_for(principals)`."""
+
+    def __init__(self, connectors):
+        self._connectors = connectors
+
+    def allowed_for(self, principals):
+        return list(self._connectors)
+
+
+def test_connector_results_merged_as_citable_chunks():
+    index = StubIndex([_hit("local passage")])
+    connector = FakeConnector(
+        name="slack",
+        results=[
+            ConnectorResult(
+                title="Thread 1", text="slack text 1", link="https://s/1", connector="slack"
+            ),
+            ConnectorResult(title="Thread 2", text="slack text 2", connector="slack"),
+        ],
+    )
+    registry = FakeRegistry([connector])
+    llm = FakeLLM(reply="Local [1]. Slack says [2] and [3].")
+    service = QueryService(FakeEmbedder(), index, llm, connector_registry=registry)
+
+    results = service.retrieve("q", connectors=["slack"])
+
+    assert [r.title for r in results] == ["doc", "slack: Thread 1", "slack: Thread 2"]
+    assert results[1].source_uri == "https://s/1"
+    assert results[1].text == "slack text 1"
+    assert results[2].source_uri == "slack"  # no link -> falls back to connector name
+
+    answer = service.ask("q", connectors=["slack"])
+    assert [c.index for c in answer.citations] == [1, 2, 3]
+    assert answer.citations[1].title == "slack: Thread 1"
+    assert answer.citations[2].title == "slack: Thread 2"
+
+
+def test_slow_connector_is_skipped_not_fatal():
+    index = StubIndex([_hit("local passage")])
+    slow = FakeConnector(name="slow", delay=1.0, results=[
+        ConnectorResult(title="never", text="never", connector="slow"),
+    ])
+    registry = FakeRegistry([slow])
+    service = QueryService(
+        FakeEmbedder(), index, FakeLLM(reply="Local [1]."), connector_registry=registry,
+        connector_timeout=0.05,
+    )
+
+    results = service.retrieve("q", connectors=["slow"])
+
+    assert [r.title for r in results] == ["doc"]
+    answer = service.ask("q", connectors=["slow"])
+    assert answer.text == "Local [1]."
+
+
+def test_raising_connector_is_skipped():
+    index = StubIndex([_hit("local passage")])
+    ok = FakeConnector(
+        name="ok",
+        results=[ConnectorResult(title="Good", text="good text", connector="ok")],
+    )
+    bad = FakeConnector(name="bad", raises=RuntimeError("connector exploded"))
+    registry = FakeRegistry([ok, bad])
+    service = QueryService(
+        FakeEmbedder(), index, FakeLLM(reply="ok"), connector_registry=registry
+    )
+
+    results = service.retrieve("q", connectors=["ok", "bad"])
+
+    assert [r.title for r in results] == ["doc", "ok: Good"]
+    answer = service.ask("q", connectors=["ok", "bad"])
+    assert answer.text == "ok"
+
+
+def test_connectors_not_selected_is_pure_local():
+    index = StubIndex([_hit("local passage")])
+    connector = FakeConnector(
+        name="slack",
+        results=[ConnectorResult(title="Thread", text="text", connector="slack")],
+    )
+    registry = FakeRegistry([connector])
+    service = QueryService(FakeEmbedder(), index, FakeLLM(), connector_registry=registry)
+
+    results_none = service.retrieve("q", connectors=None)
+    results_empty = service.retrieve("q", connectors=[])
+
+    assert [r.title for r in results_none] == ["doc"]
+    assert [r.title for r in results_empty] == ["doc"]
+    assert connector.calls == []
+
+    # A connector not in the selected names is never queried, even when others are.
+    other = FakeConnector(
+        name="other",
+        results=[ConnectorResult(title="X", text="x", connector="other")],
+    )
+    registry2 = FakeRegistry([connector, other])
+    service2 = QueryService(FakeEmbedder(), index, FakeLLM(), connector_registry=registry2)
+    service2.retrieve("q", connectors=["slack"])
+    assert other.calls == []
+
+
+def test_unallowed_connector_name_ignored():
+    index = StubIndex([_hit("local passage")])
+    registry = FakeRegistry([])  # allowed_for returns nothing -> "slack" is not allowed
+    service = QueryService(FakeEmbedder(), index, FakeLLM(), connector_registry=registry)
+
+    results = service.retrieve("q", connectors=["slack"])
+
+    assert [r.title for r in results] == ["doc"]

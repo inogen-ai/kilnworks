@@ -1,10 +1,20 @@
+import concurrent.futures
+import logging
 import re
 from collections.abc import Iterator, Sequence
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from kilnworks.core.errors import ProviderError
-from kilnworks.core.models import Answer, Citation, Completion, RetrievedChunk
-from kilnworks.core.ports import CostRecorder, Embedder, LLMProvider, VectorIndex
+from kilnworks.core.models import (
+    CONNECTOR_STATUS_READY,
+    Answer,
+    Citation,
+    Completion,
+    RetrievedChunk,
+)
+from kilnworks.core.ports import ConnectorRegistry, CostRecorder, Embedder, LLMProvider, VectorIndex
+
+logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = (
     "You are a knowledge assistant. Answer using ONLY the provided context blocks. "
@@ -46,11 +56,67 @@ class QueryService:
         index: VectorIndex,
         llm: LLMProvider,
         cost: CostRecorder | None = None,
+        connector_registry: ConnectorRegistry | None = None,
+        connector_timeout: float = 8.0,
+        connector_result_limit: int = 5,
     ):
         self._embedder = embedder
         self._index = index
         self._llm = llm
         self._cost = cost
+        self._connector_registry = connector_registry
+        self._connector_timeout = connector_timeout
+        self._connector_result_limit = connector_result_limit
+
+    def _federated_results(
+        self,
+        question: str,
+        principals: Sequence[str],
+        connectors: Sequence[str],
+    ) -> list[RetrievedChunk]:
+        allowed = {c.name: c for c in self._connector_registry.allowed_for(principals)}
+        chosen = [
+            allowed[name]
+            for name in connectors
+            if name in allowed and allowed[name].status() == CONNECTOR_STATUS_READY
+        ]
+        if not chosen:
+            return []
+
+        federated: list[RetrievedChunk] = []
+        skipped: list[str] = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(chosen)) as executor:
+            futures = {
+                executor.submit(c.search, question, self._connector_result_limit): c
+                for c in chosen
+            }
+            for future in futures:
+                connector = futures[future]
+                try:
+                    connector_results = future.result(timeout=self._connector_timeout)
+                except concurrent.futures.TimeoutError:
+                    skipped.append(connector.name)
+                    logger.warning("connector %r timed out; skipping", connector.name)
+                    continue
+                except Exception:
+                    skipped.append(connector.name)
+                    logger.warning("connector %r failed; skipping", connector.name, exc_info=True)
+                    continue
+                for r in connector_results:
+                    federated.append(
+                        RetrievedChunk(
+                            id=uuid4(),
+                            document_id=uuid4(),
+                            ordinal=0,
+                            text=r.text,
+                            heading_path=[],
+                            acl_tags=[],
+                            source_uri=(r.link or r.connector),
+                            title=f"{r.connector}: {r.title}",
+                            score=0.0,
+                        )
+                    )
+        return federated
 
     def retrieve(
         self,
@@ -61,7 +127,6 @@ class QueryService:
         source_ids: Sequence[UUID] | None = None,
         connectors: Sequence[str] | None = None,
     ) -> list[RetrievedChunk]:
-        # `connectors` is reserved for federated retrieval (task C2) and is not yet used.
         batch = self._embedder.embed([question])
         if self._cost:
             self._cost.record_cost(
@@ -69,6 +134,8 @@ class QueryService:
                 "query", user_id=user_id,
             )
         results = self._index.search(batch.vectors[0], principals, limit, source_ids=source_ids)
+        if self._connector_registry is not None and connectors:
+            results = list(results) + self._federated_results(question, principals, connectors)
         return results
 
     def ask(
