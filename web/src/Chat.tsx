@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { ApiError, askStream, type Answer, type Citation } from "./api";
-import type { Selection } from "./Sources";
+import { effectiveSelection } from "./selection";
+import type { Catalog, Selection } from "./Sources";
 
 type Message = {
   role: "user" | "assistant";
@@ -14,10 +15,12 @@ export default function Chat({
   token,
   onAuthError,
   selection,
+  catalog,
 }: {
   token: string;
   onAuthError: () => void;
   selection: Selection;
+  catalog: Catalog;
 }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [question, setQuestion] = useState("");
@@ -58,8 +61,16 @@ export default function Chat({
     const controller = new AbortController();
     abortRef.current = controller;
     try {
-      const sourceIds = [...selection.documentIds];
-      const connectors = [...selection.connectorNames];
+      const sourceIds = effectiveSelection(
+        selection.documentIds,
+        catalog.documentIds,
+        catalog.loaded,
+      );
+      const connectors = effectiveSelection(
+        selection.connectorNames,
+        catalog.connectorNames,
+        catalog.loaded,
+      );
       for await (const sse of askStream(
         token,
         asked,

@@ -26,19 +26,34 @@ function isConnectorSelectable(connector: ConnectorInfo): boolean {
   return !connector.needs_login && connector.status !== "down";
 }
 
+export type Catalog = {
+  // False until the first documents *and* connectors fetch has settled, so
+  // callers know when "known" is trustworthy enough to treat a matching
+  // selection as "everything".
+  loaded: boolean;
+  documentIds: string[];
+  connectorNames: string[];
+};
+
+export const emptyCatalog: Catalog = { loaded: false, documentIds: [], connectorNames: [] };
+
 export default function Sources({
   token,
   onAuthError,
   selection,
   setSelection,
+  onCatalogChange,
 }: {
   token: string;
   onAuthError: () => void;
   selection: Selection;
   setSelection: Dispatch<SetStateAction<Selection>>;
+  onCatalogChange?: (catalog: Catalog) => void;
 }) {
   const [documents, setDocuments] = useState<DocumentInfo[]>([]);
   const [connectors, setConnectors] = useState<ConnectorInfo[]>([]);
+  const [documentsLoaded, setDocumentsLoaded] = useState(false);
+  const [connectorsLoaded, setConnectorsLoaded] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [openDetails, setOpenDetails] = useState<Set<string>>(new Set());
@@ -75,6 +90,8 @@ export default function Sources({
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) onAuthError();
       else setNotice("couldn't load documents");
+    } finally {
+      if (aliveRef.current) setDocumentsLoaded(true);
     }
   }, [token, onAuthError, setSelection]);
 
@@ -99,6 +116,8 @@ export default function Sources({
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) onAuthError();
       else setNotice("couldn't load connectors");
+    } finally {
+      if (aliveRef.current) setConnectorsLoaded(true);
     }
   }, [token, onAuthError, setSelection]);
 
@@ -106,6 +125,14 @@ export default function Sources({
     void refreshDocuments();
     void refreshConnectors();
   }, [refreshDocuments, refreshConnectors]);
+
+  useEffect(() => {
+    onCatalogChange?.({
+      loaded: documentsLoaded && connectorsLoaded,
+      documentIds: documents.map((d) => d.id),
+      connectorNames: connectors.filter(isConnectorSelectable).map((c) => c.name),
+    });
+  }, [documents, connectors, documentsLoaded, connectorsLoaded, onCatalogChange]);
 
   const MAX_POLLS = 200;
   const MAX_CONSECUTIVE_ERRORS = 4;
