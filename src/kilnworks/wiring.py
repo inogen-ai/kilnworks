@@ -1,3 +1,4 @@
+import logging
 from dataclasses import dataclass
 
 import psycopg
@@ -18,6 +19,7 @@ from kilnworks.adapters.media.vision_ollama import OllamaVision
 from kilnworks.adapters.media.vision_openai import OpenAIVision
 from kilnworks.adapters.pgvector_store import PgVectorStore
 from kilnworks.core.chunking import HeadingAwareChunker
+from kilnworks.core.connectors import ConnectorRegistry
 from kilnworks.core.ingestion import IngestionService
 from kilnworks.core.ports import MediaExtractor, Transcriber, VisionExtractor
 from kilnworks.core.query import QueryService
@@ -25,12 +27,15 @@ from kilnworks.costmeter import PgCostLedger
 from kilnworks.db.connection import connect
 from kilnworks.settings import Settings
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class Services:
     ingestion: IngestionService
     query: QueryService
     media: MediaExtractor
+    connectors: ConnectorRegistry
 
 
 MAX_EMBEDDING_DIMENSIONS = 2000
@@ -245,6 +250,42 @@ def build_judge(settings: Settings):
     return _build_llm(settings)
 
 
+def build_connector_registry(settings: Settings) -> ConnectorRegistry:
+    """Build the configured `ConnectorRegistry`, or an empty one if unconfigured.
+
+    When `settings.connectors_config` is unset this returns an empty registry without
+    importing `mcp`/`mcp_stdio` — the base/offline install path must stay mcp-free (the
+    only `mcp` import anywhere is inside the configured branch below). A missing file,
+    malformed JSON, or a bad entry must never crash startup: it's logged and treated as
+    an empty registry instead.
+    """
+    if not settings.connectors_config:
+        return ConnectorRegistry([])
+
+    try:
+        from kilnworks.adapters.connectors.mcp_stdio import MCPStdioConnector
+
+        def factory(entry):
+            return MCPStdioConnector(
+                name=entry["name"],
+                command=entry["command"],
+                env=entry.get("env", {}),
+                search_limit=entry.get("search_limit", 5),
+                search_tool=entry.get("search_tool", "search"),
+                query_arg=entry.get("query_arg", "query"),
+                extra_args=entry.get("extra_args"),
+                timeout=settings.connector_timeout,
+            )
+
+        return ConnectorRegistry.from_config(settings.connectors_config, factory)
+    except Exception:
+        logger.warning(
+            "failed to load connectors config %r; starting with an empty connector "
+            "registry", settings.connectors_config, exc_info=True,
+        )
+        return ConnectorRegistry([])
+
+
 def build_services_prepared(settings: Settings, conn) -> Services:
     validate_provider_settings(settings)
     store = PgVectorStore(conn)
@@ -253,10 +294,17 @@ def build_services_prepared(settings: Settings, conn) -> Services:
     embedder = _build_embedder(settings)
     llm = _build_llm(settings)
     media = build_media_extractor(settings)
+    registry = build_connector_registry(settings)
     return Services(
         ingestion=IngestionService(
             store=store, chunker=HeadingAwareChunker(), embedder=embedder, cost=cost
         ),
-        query=QueryService(embedder, store, llm, cost=cost),
+        query=QueryService(
+            embedder, store, llm, cost=cost,
+            connector_registry=registry,
+            connector_timeout=settings.connector_timeout,
+            connector_result_limit=settings.connector_result_limit,
+        ),
         media=media,
+        connectors=registry,
     )

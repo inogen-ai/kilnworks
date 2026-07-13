@@ -351,3 +351,105 @@ def test_build_services_prepared_wires_media_extractor(pg_url):
     assert isinstance(services.media.vision, FakeVisionExtractor)
     assert isinstance(services.media.transcription, FakeTranscriber)
     conn.close()
+
+
+def test_no_connectors_config_yields_empty_registry_and_no_mcp_import(pg_url, monkeypatch):
+    import sys
+
+    # Other test modules (tests/adapters/test_mcp_stdio.py) legitimately import `mcp`
+    # directly to exercise the real MCPStdioConnector, which leaves it cached in
+    # sys.modules for the rest of the pytest session regardless of run order. Scrub any
+    # already-cached mcp modules first (monkeypatch restores them after the test) so this
+    # assertion faithfully checks "did *this* build import mcp", not "has anything, ever,
+    # in this session imported mcp".
+    for mod_name in list(sys.modules):
+        if mod_name == "mcp" or mod_name.startswith("mcp."):
+            monkeypatch.delitem(sys.modules, mod_name, raising=False)
+
+    conn = connect(pg_url)
+    init_db(conn)
+    from kilnworks.wiring import build_services_prepared
+
+    services = build_services_prepared(
+        Settings(
+            database_url=pg_url, fake_providers=True, openai_api_key="", connectors_config=""
+        ),
+        conn,
+    )
+    conn.close()
+    assert services.connectors.allowed_for(["public"]) == []
+    assert "mcp" not in sys.modules  # sacred constraint: base path never loads mcp
+
+
+def test_malformed_connectors_config_does_not_crash(tmp_path, monkeypatch, caplog):
+    monkeypatch.chdir(tmp_path)
+    from kilnworks.wiring import build_connector_registry
+
+    bad_config = tmp_path / "connectors.json"
+    bad_config.write_text("{not valid json")
+
+    with caplog.at_level("WARNING"):
+        registry = build_connector_registry(
+            Settings(fake_providers=True, connectors_config=str(bad_config))
+        )
+    assert registry.allowed_for(["public"]) == []
+    assert any("connectors config" in record.message for record in caplog.records)
+
+
+def test_missing_connectors_config_does_not_crash(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    from kilnworks.wiring import build_connector_registry
+
+    registry = build_connector_registry(
+        Settings(fake_providers=True, connectors_config=str(tmp_path / "nope.json"))
+    )
+    assert registry.allowed_for(["public"]) == []
+
+
+def test_connectors_config_builds_registry_via_mcp_factory(tmp_path, monkeypatch):
+    pytest.importorskip("mcp")
+    monkeypatch.chdir(tmp_path)
+    import json
+
+    from kilnworks.adapters.connectors.mcp_stdio import MCPStdioConnector
+    from kilnworks.wiring import build_connector_registry
+
+    config_path = tmp_path / "connectors.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "connectors": [
+                    {
+                        "name": "docs",
+                        "command": ["docs-mcp"],
+                        "allowed_groups": ["public"],
+                        "env": {"TOKEN": "abc"},
+                        "search_limit": 3,
+                        "search_tool": "lookup",
+                        "query_arg": "q",
+                        "extra_args": {"mode": "fast"},
+                    }
+                ]
+            }
+        )
+    )
+
+    registry = build_connector_registry(
+        Settings(
+            fake_providers=True,
+            connectors_config=str(config_path),
+            connector_timeout=12.0,
+        )
+    )
+    connectors = registry.allowed_for(["public"])
+    assert len(connectors) == 1
+    connector = connectors[0]
+    assert isinstance(connector, MCPStdioConnector)
+    assert connector.name == "docs"
+    assert connector._command == ["docs-mcp"]
+    assert connector._env == {"TOKEN": "abc"}
+    assert connector._search_limit == 3
+    assert connector._search_tool == "lookup"
+    assert connector._query_arg == "q"
+    assert connector._extra_args == {"mode": "fast"}
+    assert connector._timeout == 12.0

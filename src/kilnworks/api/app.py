@@ -19,6 +19,7 @@ from kilnworks.adapters.sources.parsers import SUPPORTED_SUFFIXES
 from kilnworks.api.deps import current_claims, get_conn, get_services, get_settings
 from kilnworks.api.schemas import (
     AskRequest,
+    ConnectorInfo,
     DocumentInfo,
     JobInfo,
     TokenRequest,
@@ -212,6 +213,16 @@ def create_app(settings: Settings) -> FastAPI:
             DocumentInfo(id=str(row[0]), source_uri=row[1], title=row[2],
                          status=row[3], error=row[4])
             for row in rows
+        ]
+
+    @app.get("/connectors", response_model=list[ConnectorInfo])
+    def connectors(
+        claims: TokenClaims = Depends(current_claims),
+        services=Depends(get_services),
+    ) -> list[ConnectorInfo]:
+        return [
+            ConnectorInfo(name=n, status=s, needs_login=nl)
+            for (n, s, nl) in services.connectors.visible(claims.principals)
         ]
 
     @app.post("/documents", status_code=202)

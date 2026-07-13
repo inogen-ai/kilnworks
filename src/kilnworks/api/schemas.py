@@ -20,6 +20,12 @@ class AskRequest(BaseModel):
     connectors: list[str] | None = None
 
 
+class ConnectorInfo(BaseModel):
+    name: str
+    status: str
+    needs_login: bool
+
+
 class DocumentInfo(BaseModel):
     id: str
     source_uri: str
