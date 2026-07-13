@@ -139,6 +139,8 @@ button.danger { color: var(--bad); border-color: var(--bad); }
 .message p { margin: 0; white-space: pre-wrap; }
 .citations { margin: 8px 0 0; padding: 0 0 0 4px; list-style: none; color: var(--ink-dim); font-size: 13px; font-family: var(--mono); }
 .empty { color: var(--ink-faint); text-align: center; margin-top: 40px; font-family: var(--serif); font-style: italic; }
+.empty a { display: inline-block; margin-top: 6px; font-style: normal; color: var(--ink-dim); }
+.empty a:hover { color: var(--ember); }
 
 .ask { display: flex; gap: 10px; padding: 16px 20px; border-top: 1px solid var(--line); }
 .ask input { flex: 1; }

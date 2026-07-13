@@ -317,14 +317,16 @@ export default function Sources({
 
       <div className="sources-head">
         <h2>Connectors</h2>
-        <div className="sources-actions">
-          <button className="ghost small" onClick={selectAllConnectors}>
-            All
-          </button>
-          <button className="ghost small" onClick={selectNoConnectors}>
-            None
-          </button>
-        </div>
+        {connectors.length > 0 && (
+          <div className="sources-actions">
+            <button className="ghost small" onClick={selectAllConnectors}>
+              All
+            </button>
+            <button className="ghost small" onClick={selectNoConnectors}>
+              None
+            </button>
+          </div>
+        )}
       </div>
       <ul className="source-list">
         {connectors.map((connector) => {
@@ -349,7 +351,21 @@ export default function Sources({
             </li>
           );
         })}
-        {connectors.length === 0 && <li className="empty">No connectors configured.</li>}
+        {connectors.length === 0 && (
+          <li className="empty">
+            <p className="notice">
+              Connectors let you federate live queries to systems like Salesforce,
+              Microsoft&nbsp;365, ServiceNow, and HubSpot.
+            </p>
+            <a
+              href="https://github.com/inogen-ai/kilnworks#connectors-beta"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Set up connectors →
+            </a>
+          </li>
+        )}
       </ul>
     </aside>
   );
