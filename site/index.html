@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kilnworks — self-hostable RAG that keeps its secrets</title>
+<meta name="description" content="Kilnworks is a self-hostable RAG assistant that enforces every document's access rules at retrieval — filtered by who's asking, before anything is ranked or shown. A five-minute Docker quickstart, a fully-offline mode, and your data never leaves your box.">
+
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="Kilnworks — self-hostable RAG that keeps its secrets">
+<meta property="og:description" content="Self-hostable RAG that enforces access control at retrieval, not as an afterthought. Five-minute Docker quickstart, fully-offline mode, your data never leaves your box.">
+<meta property="og:image" content="https://kilnworks.inogen.ai/assets/social.png">
+<meta property="og:url" content="https://kilnworks.inogen.ai">
+
+<!-- Twitter -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Kilnworks — self-hostable RAG that keeps its secrets">
+<meta name="twitter:description" content="Self-hostable RAG that enforces access control at retrieval, not as an afterthought. Five-minute Docker quickstart, fully-offline mode, your data never leaves your box.">
+<meta name="twitter:image" content="https://kilnworks.inogen.ai/assets/social.png">
+
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- inline mark used throughout -->
+<nav>
+  <div class="wrap inner">
+    <span class="brand">
+      <svg width="26" height="26" viewBox="0 0 24 24" aria-label="Kilnworks mark"><path d="M6.5 3.2 H17.5 L15.8 6.6 a6.6 6.6 0 1 1 -7.6 0 Z" fill="none" stroke="var(--ember)" stroke-width="1.7" stroke-linejoin="round"/><path d="M8.6 12.4 a3.6 3.6 0 0 0 6.8 0" fill="none" stroke="var(--celadon)" stroke-width="1.7" stroke-linecap="round"/></svg>
+      <span class="wm"><i>Kiln</i>works</span>
+    </span>
+    <span class="navlinks">
+      <a href="#features">Features</a>
+      <a href="#quickstart">Quickstart</a>
+      <a href="https://github.com/inogen-ai/kilnworks#readme" target="_blank" rel="noopener">Docs</a>
+      <a class="ghbtn" href="https://github.com/inogen-ai/kilnworks" target="_blank" rel="noopener">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0a8 8 0 0 0-2.5 15.6c.4.07.55-.17.55-.38v-1.3c-2.2.48-2.67-1.07-2.67-1.07-.36-.92-.88-1.16-.88-1.16-.72-.5.05-.48.05-.48.8.056 1.22.82 1.22.82.71 1.22 1.87.87 2.33.66.07-.52.28-.87.5-1.07-1.76-.2-3.6-.88-3.6-3.9 0-.86.3-1.57.82-2.12-.08-.2-.36-1 .08-2.1 0 0 .67-.21 2.2.8a7.6 7.6 0 0 1 4 0c1.53-1.03 2.2-.8 2.2-.8.44 1.1.16 1.9.08 2.1.5.55.82 1.26.82 2.12 0 3.03-1.85 3.7-3.6 3.9.28.24.54.72.54 1.46v2.16c0 .21.15.46.55.38A8 8 0 0 0 8 0Z"/></svg>
+        GitHub
+      </a>
+    </span>
+  </div>
+</nav>
+
+<!-- ===================== HERO ===================== -->
+<header class="hero">
+  <div class="wrap inner">
+    <p class="kick reveal d1"><span class="d"></span>Self-hostable RAG · built by InoGen</p>
+    <h1 class="reveal d2">Turn your documents into a knowledge base that <i>keeps its secrets.</i></h1>
+    <p class="lede reveal d3">Kilnworks is a self-hostable RAG assistant that enforces every document's access rules <b>at retrieval</b> — filtered by who's asking, before anything is ranked or shown. A five-minute Docker quickstart, a fully-offline mode, and your data never leaves your box.</p>
+    <div class="actions reveal d3">
+      <a class="btn primary" href="https://github.com/inogen-ai/kilnworks" target="_blank" rel="noopener">Get started</a>
+      <a class="btn ghost" href="#features">See what it does</a>
+    </div>
+    <div class="term reveal d4"><span class="p">$</span> docker compose up -d &nbsp;<span style="color:var(--ink-faint)">&mdash; you're chatting your docs in five minutes</span></div>
+  </div>
+</header>
+
+<!-- ===================== ACL BAND ===================== -->
+<section class="band">
+  <div class="wrap grid">
+    <div>
+      <h2>Access control that runs <i>at retrieval</i>, not as an afterthought.</h2>
+      <p>Most RAG stacks bolt permissions on at the UI, after the model has already seen everything. Kilnworks tags every chunk with its source document's ACL and filters the vector search by the caller's identity <b>before ranking</b>. A user simply can't be answered from a document they aren't allowed to see — the model never receives it.</p>
+      <p style="color:var(--ink-faint);font-size:14px">OIDC SSO maps your IdP groups straight to those ACLs.</p>
+    </div>
+    <div class="flow" aria-hidden="true">
+      <div class="step on"><span class="n">?</span> question + caller identity</div>
+      <div class="arrow">↓</div>
+      <div class="step"><span class="n">▦</span> embed &amp; search all chunks</div>
+      <div class="arrow gate">↓ &nbsp;filter by acl_tags ∩ principals</div>
+      <div class="step on"><span class="n">✓</span> only permitted chunks ranked</div>
+      <div class="arrow">↓</div>
+      <div class="step on"><span class="n">◆</span> answer, with citations</div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== DEMO ===================== -->
+<section class="demo">
+  <div class="wrap">
+    <div class="lead">
+      <p class="ey">See it work</p>
+      <h2>A real conversation, cited from your own documents.</h2>
+    </div>
+    <figure class="demo-frame">
+      <img src="assets/demo.gif" alt="Screen recording of the Kilnworks chat UI answering a question with citations drawn from ingested documents" width="1000" height="564" loading="lazy">
+      <figcaption>Live capture from the Kilnworks chat UI — <code>docker compose up</code>, then ask.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ===================== FEATURES ===================== -->
+<section class="features" id="features">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="ey">What comes out of the kiln</p>
+      <h2>Production posture, not a demo.</h2>
+    </div>
+    <div class="cards">
+      <div class="card hot">
+        <span class="badge">flagship</span>
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+        <h3>ACLs enforced at retrieval</h3>
+        <p>Every chunk carries its document's access tags; queries are filtered by caller identity before ranking. Permissions you can actually trust.</p>
+      </div>
+      <div class="card">
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3v4M12 21v-4M3 12h4M21 12h-4"/><circle cx="12" cy="12" r="4"/></svg>
+        <h3>Five-minute quickstart</h3>
+        <p>One <code>docker compose up</code> gets you Postgres + pgvector, a chat UI, and a job queue. Chatting your documents in minutes.</p>
+      </div>
+      <div class="card">
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7Z"/><path d="M8 9h8"/></svg>
+        <h3>Fully offline</h3>
+        <p>Run chat and embeddings entirely on local Ollama — no API keys, no data leaving your infrastructure. Air-gap friendly.</p>
+      </div>
+      <div class="card">
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 17.5h7M17.5 14v7"/></svg>
+        <h3>Multimodal ingestion</h3>
+        <p>Text, PDF, DOCX, and tables parse offline. Images (OCR + vision) and audio/video (transcription with timestamps) are opt-in.</p>
+      </div>
+      <div class="card hot">
+        <span class="badge">new</span>
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8.2 10.8 15.8 7M8.2 13.2 15.8 17"/></svg>
+        <h3>Live MCP connectors</h3>
+        <p>Federate answers with read-only queries to Salesforce, Microsoft&nbsp;365, ServiceNow, and HubSpot — cited, group-gated, queried fresh.</p>
+      </div>
+      <div class="card">
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 19V5M4 19h16"/><path d="M8 15l3-4 3 2 4-6"/></svg>
+        <h3>Per-user cost ledger</h3>
+        <p>Every chat, embedding, and extraction call is metered per user — chargeback and budget visibility built in, not bolted on.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== QUICKSTART ===================== -->
+<section class="quick" id="quickstart">
+  <div class="wrap quickgrid">
+    <div>
+      <h2>From clone to cited answer in one command.</h2>
+      <p>Bring up the stack, create a user, and ask. Swap the API key for <code>KILNWORKS_FAKE_PROVIDERS=true</code> to try it fully offline first.</p>
+      <p style="color:var(--ink-faint);font-size:14px">Apache-2.0 · Postgres + pgvector · CI-gated evals</p>
+    </div>
+    <div class="code">
+      <div class="bar" aria-hidden="true"><span></span><span></span><span></span></div>
+<pre><span class="c"># fire it up (or KILNWORKS_FAKE_PROVIDERS=true to go offline)</span>
+export KILNWORKS_OPENAI_API_KEY=sk-...
+<span class="p">$</span> docker compose up -d --build
+<span class="p">$</span> docker compose exec api kilnworks <span class="k">create-user</span> you@co.com --password ...
+
+<span class="c"># ask your documents — answers come back cited</span>
+<span class="p">$</span> curl localhost:8000/ask -H "authorization: Bearer $TOKEN" \
+    -d '{<span class="k">"question"</span>:"What did we ship in Q3?"}'</pre>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== PORTFOLIO ===================== -->
+<section class="port">
+  <div class="wrap">
+    <div class="lead">
+      <h2>Part of InoGen's open-source portfolio</h2>
+      <p>Kilnworks ships alongside four read-only MCP connectors it can federate with — the same servers you can point any MCP client at.</p>
+    </div>
+    <div class="conn">
+      <a href="https://github.com/inogen-ai/m365-mcp-server" target="_blank" rel="noopener"><span class="nm">m365</span><span class="ds">SharePoint · OneDrive</span></a>
+      <a href="https://github.com/inogen-ai/snow-mcp-server" target="_blank" rel="noopener"><span class="nm">servicenow</span><span class="ds">tables · KB</span></a>
+      <a href="https://github.com/inogen-ai/sfdc-mcp-server" target="_blank" rel="noopener"><span class="nm">salesforce</span><span class="ds">SOQL · search</span></a>
+      <a href="https://github.com/inogen-ai/hubspot-mcp-server" target="_blank" rel="noopener"><span class="nm">hubspot</span><span class="ds">CRM objects</span></a>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== FOOTER ===================== -->
+<footer>
+  <div class="wrap">
+    <div class="row">
+      <span class="brand">
+        <svg width="24" height="24" viewBox="0 0 24 24" aria-label="Kilnworks mark"><path d="M6.5 3.2 H17.5 L15.8 6.6 a6.6 6.6 0 1 1 -7.6 0 Z" fill="none" stroke="var(--ember)" stroke-width="1.7" stroke-linejoin="round"/><path d="M8.6 12.4 a3.6 3.6 0 0 0 6.8 0" fill="none" stroke="var(--celadon)" stroke-width="1.7" stroke-linecap="round"/></svg>
+        <span class="wm"><i>Kiln</i>works</span>
+      </span>
+      <span class="fl">
+        <a href="https://github.com/inogen-ai/kilnworks" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/inogen-ai/kilnworks#readme" target="_blank" rel="noopener">Docs</a>
+        <a href="#features">Features</a>
+        <a href="https://inogen.ai" target="_blank" rel="noopener">InoGen</a>
+      </span>
+    </div>
+    <div class="fine">
+      <span>Built by <b>InoGen</b> — production AI systems for enterprises.</span>
+      <span>Apache-2.0 · © 2026</span>
+    </div>
+  </div>
+</footer>
+</body>
+</html>

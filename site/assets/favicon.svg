@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" aria-label="Kilnworks mark" role="img">
+  <rect x="0" y="0" width="24" height="24" rx="5" fill="#1b1814"/>
+  <path d="M6.5 3.2 H17.5 L15.8 6.6 a6.6 6.6 0 1 1 -7.6 0 Z" fill="none" stroke="#d2703f" stroke-width="1.7" stroke-linejoin="round"/>
+  <path d="M8.6 12.4 a3.6 3.6 0 0 0 6.8 0" fill="none" stroke="#8fbf9f" stroke-width="1.7" stroke-linecap="round"/>
+</svg>
