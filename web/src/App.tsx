@@ -30,15 +30,19 @@ export default function App() {
   const [catalog, setCatalog] = useState<Catalog>(emptyCatalog);
   const handleCatalogChange = useCallback((next: Catalog) => setCatalog(next), []);
 
-  function handleLogin(newToken: string) {
+  // These are passed as props into Sources/Chat, whose data-fetching effects list
+  // them in useCallback deps. They MUST be stable references or those effects
+  // re-run every render — an unstable handleLogout here previously caused an
+  // infinite fetch loop (documents/connectors re-fetched on every render).
+  const handleLogin = useCallback((newToken: string) => {
     sessionStorage.setItem("kilnworks-token", newToken);
     setToken(newToken);
-  }
+  }, []);
 
-  function handleLogout() {
+  const handleLogout = useCallback(() => {
     sessionStorage.removeItem("kilnworks-token");
     setToken(null);
-  }
+  }, []);
 
   if (!token) return <Login onLogin={handleLogin} ssoError={ssoError} />;
 
