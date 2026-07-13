@@ -7,6 +7,7 @@ from uuid import UUID
 from kilnworks.core.models import (
     Chunk,
     Completion,
+    ConnectorResult,
     Document,
     EmbeddingBatch,
     RetrievedChunk,
@@ -80,6 +81,14 @@ class MediaExtractor:
     vision: VisionExtractor | None = None
     transcription: Transcriber | None = None
     max_bytes: int = DEFAULT_MAX_MEDIA_BYTES
+
+
+class Connector(Protocol):
+    name: str
+
+    def search(self, query: str, limit: int) -> list[ConnectorResult]: ...
+
+    def status(self) -> str: ...
 
 
 class CostRecorder(Protocol):

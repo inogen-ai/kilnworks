@@ -6,6 +6,10 @@ DOC_STATUS_PENDING = "pending"
 DOC_STATUS_READY = "ready"
 DOC_STATUS_FAILED = "failed"
 
+CONNECTOR_STATUS_READY = "ready"
+CONNECTOR_STATUS_NEEDS_LOGIN = "needs_login"
+CONNECTOR_STATUS_DOWN = "down"
+
 
 class Completion(BaseModel):
     text: str
@@ -72,3 +76,10 @@ class IngestReport(BaseModel):
 class EmbeddingBatch(BaseModel):
     vectors: list[list[float]]
     total_tokens: int = 0
+
+
+class ConnectorResult(BaseModel):
+    title: str
+    text: str
+    link: str | None = None
+    connector: str
