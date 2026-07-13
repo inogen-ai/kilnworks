@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { ApiError, askStream, type Answer, type Citation } from "./api";
-import { effectiveSelection } from "./selection";
+import { askPayload } from "./selection";
 import type { Catalog, Selection } from "./Sources";
 
 type Message = {
@@ -61,16 +61,7 @@ export default function Chat({
     const controller = new AbortController();
     abortRef.current = controller;
     try {
-      const sourceIds = effectiveSelection(
-        selection.documentIds,
-        catalog.documentIds,
-        catalog.loaded,
-      );
-      const connectors = effectiveSelection(
-        selection.connectorNames,
-        catalog.connectorNames,
-        catalog.loaded,
-      );
+      const { sourceIds, connectors } = askPayload(selection, catalog);
       for await (const sse of askStream(
         token,
         asked,
