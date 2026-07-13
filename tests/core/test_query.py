@@ -351,3 +351,28 @@ def test_unallowed_connector_name_ignored():
     results = service.retrieve("q", connectors=["slack"])
 
     assert [r.title for r in results] == ["doc"]
+
+
+def test_federated_results_are_capped_at_connector_context_cap():
+    """Even with connectors selected that together return more results than the
+    cap, the merged federated additions must be capped -- not grow unbounded with
+    the number of selected connectors or connector_result_limit."""
+    index = StubIndex([_hit("local passage")])
+    many_results = [
+        ConnectorResult(title=f"R{i}", text=f"text {i}", connector="c1") for i in range(10)
+    ]
+    connector = FakeConnector(name="c1", results=many_results)
+    registry = FakeRegistry([connector])
+    service = QueryService(
+        FakeEmbedder(),
+        index,
+        FakeLLM(),
+        connector_registry=registry,
+        connector_result_limit=10,
+        connector_context_cap=3,
+    )
+
+    results = service.retrieve("q", connectors=["c1"])
+
+    federated = [r for r in results if r.title.startswith("c1:")]
+    assert len(federated) == 3

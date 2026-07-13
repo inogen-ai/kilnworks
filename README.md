@@ -198,12 +198,12 @@ not bundled with Kilnworks or published to PyPI yet.
 1. `pip install kilnworks[connectors]` (or `uv sync --extra connectors`) — installs the MCP
    client library.
 2. Install the connector server(s) you want to use and make their command available on
-   `PATH`. InoGen publishes read-only MCP servers for
+   `PATH`. InoGen maintains read-only MCP servers as separate sibling repositories (not
+   yet published to PyPI — install directly from source per each repo's own setup):
    [m365](https://github.com/inogen-ai/m365-mcp-server),
    [ServiceNow](https://github.com/inogen-ai/snow-mcp-server),
    [Salesforce](https://github.com/inogen-ai/sfdc-mcp-server), and
-   [HubSpot](https://github.com/inogen-ai/hubspot-mcp-server) — see each repo for its own
-   setup.
+   [HubSpot](https://github.com/inogen-ai/hubspot-mcp-server).
 3. Write a connectors config JSON and point `KILNWORKS_CONNECTORS_CONFIG` at its path:
 
        {
@@ -216,20 +216,25 @@ not bundled with Kilnworks or published to PyPI yet.
              "search_limit": 5,
              "search_tool": "search",
              "query_arg": "term",
+             "limit_arg": "limit",
              "extra_args": {}
            }
          ]
        }
 
    `command` is the argv Kilnworks spawns the server's stdio process with — fresh for
-   every query, not once at startup. `env` is merged into the spawned process's
-   environment (values pass through shell-style `$VAR` expansion, so you can reference
-   Kilnworks' own environment for secrets). `allowed_groups` is which Kilnworks ACL groups
-   may use this connector (see governance note below). `search_tool`, `query_arg`, and
-   `extra_args` map the question onto whatever the connector server's own search tool
-   expects — they vary per server: Salesforce's tool takes the query under `query_arg:
-   "term"` instead of the default `"query"`; HubSpot's requires `extra_args:
-   {"object_type": "contacts"}` to say which object type to search.
+   every query, not once at startup. The spawned process gets a minimal, safe base
+   environment (`PATH`, `HOME`, and similar — never Kilnworks' own secrets like
+   `KILNWORKS_SECRET_KEY` or its database URL), and `env` is merged on top of that base
+   (values pass through shell-style `$VAR` expansion, so you can reference Kilnworks' own
+   environment to pass through a specific secret deliberately). `allowed_groups` is which
+   Kilnworks ACL groups may use this connector (see governance note below). `search_tool`,
+   `query_arg`, and `extra_args` map the question onto whatever the connector server's own
+   search tool expects — they vary per server: Salesforce's tool takes the query under
+   `query_arg: "term"` instead of the default `"query"`; HubSpot's requires `extra_args:
+   {"object_type": "contacts"}` to say which object type to search. `limit_arg` (default
+   `"limit"`) is the tool's result-count argument name; set it to `null` for a search tool
+   that doesn't accept a limit at all.
 4. Device-code connectors (m365, Salesforce) need a one-time interactive login:
    **pre-authenticate once from a terminal** by running the server's command directly and
    completing the device-code flow — the resulting token caches to disk, so the per-query

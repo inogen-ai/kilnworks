@@ -23,6 +23,12 @@ SYSTEM_PROMPT = (
 
 NO_ANSWER_TEXT = "I couldn't find anything relevant in the knowledge base for that question."
 
+# Hard cap on how many federated (connector) context blocks a single query can append,
+# regardless of how many connectors are selected or how many results each returns.
+# Without this, N selected connectors each returning connector_result_limit results
+# could inflate the LLM context (and cost) unbounded as more connectors are added.
+DEFAULT_CONNECTOR_CONTEXT_CAP = 20
+
 
 def format_context(results: Sequence[RetrievedChunk]) -> str:
     blocks = [f"[{i + 1}] ({r.title}) {r.text}" for i, r in enumerate(results)]
@@ -58,6 +64,7 @@ class QueryService:
         connector_registry: ConnectorRegistry | None = None,
         connector_timeout: float = 8.0,
         connector_result_limit: int = 5,
+        connector_context_cap: int = DEFAULT_CONNECTOR_CONTEXT_CAP,
     ):
         self._embedder = embedder
         self._index = index
@@ -66,6 +73,7 @@ class QueryService:
         self._connector_registry = connector_registry
         self._connector_timeout = connector_timeout
         self._connector_result_limit = connector_result_limit
+        self._connector_context_cap = connector_context_cap
 
     def _federated_results(
         self,
@@ -130,7 +138,9 @@ class QueryService:
             # the shared deadline (or forever, for a hung connector); let them run to
             # completion in the background and get reaped/GC'd once they finish.
             executor.shutdown(wait=False, cancel_futures=True)
-        return federated
+        # Cap total federated blocks regardless of how many connectors were selected
+        # or how many results each returned -- bounds LLM context size/cost.
+        return federated[: self._connector_context_cap]
 
     def retrieve(
         self,

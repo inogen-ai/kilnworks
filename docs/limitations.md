@@ -111,3 +111,18 @@
   routing/rewriting or cross-source re-ranking: the raw question is sent to every
   selected connector as-is and its results are appended to the document-retrieval
   results as-is.
+- **A skipped/failed/timed-out connector is not surfaced in the answer** yet: a
+  connector that errors, times out, or is otherwise unavailable is logged and quietly
+  excluded from that query's results. The answer is still correct with respect to
+  whatever it did retrieve, but the UI doesn't currently tell the user a selected
+  source was skipped. Surfacing this (e.g. "salesforce didn't respond") is deferred to
+  a later phase.
+- **Delete permission equals read visibility:** any user whose ACL principals overlap a
+  document's `acl_tags` can delete it, not just whoever uploaded it. There is no
+  per-uploader ownership concept in v1 — access control is purely group-based, for both
+  reading and deleting.
+- **No global cap on concurrent connector subprocesses:** each request's federated
+  search/status probes are individually bounded (parallel, deadline-bound), but there is
+  no cross-request limit on how many connector subprocesses can be spawned at once —
+  many simultaneous requests against connector-heavy configs can still spike process/
+  file-descriptor usage on the host.

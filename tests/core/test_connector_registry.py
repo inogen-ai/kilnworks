@@ -1,8 +1,13 @@
 import json
+import time
 
 from kilnworks.adapters.connectors.fake import FakeConnector
 from kilnworks.core.connectors import ConnectorRegistry
-from kilnworks.core.models import CONNECTOR_STATUS_NEEDS_LOGIN, CONNECTOR_STATUS_READY
+from kilnworks.core.models import (
+    CONNECTOR_STATUS_DOWN,
+    CONNECTOR_STATUS_NEEDS_LOGIN,
+    CONNECTOR_STATUS_READY,
+)
 
 
 def _fake_factory(**calls_log):
@@ -162,3 +167,132 @@ def test_visible_excludes_disallowed_connectors():
     registry = ConnectorRegistry([(connector, ["sales"])])
 
     assert registry.visible(["public"]) == []
+
+
+def test_visible_probes_statuses_in_parallel_not_sequentially():
+    """Two connectors that each hang far past the registry's connector_timeout must
+    still return from visible() in ~one timeout, not two -- proving probes run in
+    parallel rather than serializing (which would exhaust the threadpool on
+    GET /connectors with several hung connectors)."""
+    slow_a = FakeConnector(name="slow-a", status=CONNECTOR_STATUS_READY, status_delay=5.0)
+    slow_b = FakeConnector(name="slow-b", status=CONNECTOR_STATUS_READY, status_delay=5.0)
+    registry = ConnectorRegistry(
+        [(slow_a, ["public"]), (slow_b, ["public"])], connector_timeout=0.2
+    )
+
+    start = time.monotonic()
+    visible = registry.visible(["public"])
+    elapsed = time.monotonic() - start
+
+    assert elapsed < 2.0, f"visible() took {elapsed:.3f}s; expected ~timeout, not N*delay"
+    assert ("slow-a", CONNECTOR_STATUS_DOWN, False) in visible
+    assert ("slow-b", CONNECTOR_STATUS_DOWN, False) in visible
+
+
+def test_visible_reports_fast_connector_while_another_hangs():
+    fast = FakeConnector(name="fast", status=CONNECTOR_STATUS_READY)
+    hung = FakeConnector(name="hung", status=CONNECTOR_STATUS_READY, status_delay=5.0)
+    registry = ConnectorRegistry([(fast, ["public"]), (hung, ["public"])], connector_timeout=0.2)
+
+    visible = registry.visible(["public"])
+
+    assert ("fast", CONNECTOR_STATUS_READY, False) in visible
+    assert ("hung", CONNECTOR_STATUS_DOWN, False) in visible
+
+
+def test_from_config_skips_malformed_entry_and_keeps_good_ones(tmp_path, caplog):
+    config_path = tmp_path / "connectors.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "connectors": [
+                    {
+                        "name": "good",
+                        "command": ["good-mcp"],
+                        "env": {},
+                        "allowed_groups": ["public"],
+                    },
+                    {"name": "bad-missing-command", "allowed_groups": ["public"]},
+                    {"command": ["also-bad"], "allowed_groups": ["public"]},
+                ]
+            }
+        )
+    )
+    factory = _fake_factory()
+
+    with caplog.at_level("WARNING"):
+        registry = ConnectorRegistry.from_config(str(config_path), factory)
+
+    assert len(factory.calls) == 1
+    assert factory.calls[0]["name"] == "good"
+    assert registry.get("good") is not None
+    assert registry.get("bad-missing-command") is None
+    assert any("malformed" in r.message for r in caplog.records)
+
+
+def test_from_config_skips_duplicate_names(tmp_path, caplog):
+    config_path = tmp_path / "connectors.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "connectors": [
+                    {
+                        "name": "dup",
+                        "command": ["first-mcp"],
+                        "env": {},
+                        "allowed_groups": ["public"],
+                    },
+                    {
+                        "name": "dup",
+                        "command": ["second-mcp"],
+                        "env": {},
+                        "allowed_groups": ["sales"],
+                    },
+                ]
+            }
+        )
+    )
+    factory = _fake_factory()
+
+    with caplog.at_level("WARNING"):
+        registry = ConnectorRegistry.from_config(str(config_path), factory)
+
+    assert len(factory.calls) == 1
+    assert factory.calls[0]["command"] == ["first-mcp"]
+    assert registry.get("dup") is not None
+    assert any("duplicate" in r.message for r in caplog.records)
+
+
+def test_from_config_skips_entry_when_factory_raises_and_keeps_the_rest(tmp_path, caplog):
+    config_path = tmp_path / "connectors.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "connectors": [
+                    {
+                        "name": "boom",
+                        "command": ["boom-mcp"],
+                        "env": {},
+                        "allowed_groups": ["public"],
+                    },
+                    {
+                        "name": "good",
+                        "command": ["good-mcp"],
+                        "env": {},
+                        "allowed_groups": ["public"],
+                    },
+                ]
+            }
+        )
+    )
+
+    def factory(entry):
+        if entry["name"] == "boom":
+            raise ValueError("bad config for boom")
+        return FakeConnector(name=entry["name"])
+
+    with caplog.at_level("WARNING"):
+        registry = ConnectorRegistry.from_config(str(config_path), factory)
+
+    assert registry.get("boom") is None
+    assert registry.get("good") is not None

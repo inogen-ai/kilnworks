@@ -48,6 +48,7 @@ class Settings(BaseSettings):
     connectors_config: str = ""
     connector_timeout: float = 8.0
     connector_result_limit: int = 5
+    connector_context_cap: int = 20
 
     @property
     def oidc_enabled(self) -> bool:

@@ -273,11 +273,14 @@ def build_connector_registry(settings: Settings) -> ConnectorRegistry:
                 search_limit=entry.get("search_limit", 5),
                 search_tool=entry.get("search_tool", "search"),
                 query_arg=entry.get("query_arg", "query"),
+                limit_arg=entry.get("limit_arg", "limit"),
                 extra_args=entry.get("extra_args"),
                 timeout=settings.connector_timeout,
             )
 
-        return ConnectorRegistry.from_config(settings.connectors_config, factory)
+        return ConnectorRegistry.from_config(
+            settings.connectors_config, factory, connector_timeout=settings.connector_timeout
+        )
     except Exception:
         logger.warning(
             "failed to load connectors config %r; starting with an empty connector "
@@ -304,6 +307,7 @@ def build_services_prepared(settings: Settings, conn) -> Services:
             connector_registry=registry,
             connector_timeout=settings.connector_timeout,
             connector_result_limit=settings.connector_result_limit,
+            connector_context_cap=settings.connector_context_cap,
         ),
         media=media,
         connectors=registry,

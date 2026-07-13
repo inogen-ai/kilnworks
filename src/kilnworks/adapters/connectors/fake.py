@@ -13,12 +13,14 @@ class FakeConnector:
         status: str = CONNECTOR_STATUS_READY,
         raises: Exception | None = None,
         delay: float = 0.0,
+        status_delay: float = 0.0,
     ):
         self.name = name
         self.results = results or []
         self._status = status
         self.raises = raises
         self.delay = delay
+        self.status_delay = status_delay
         self.calls: list[tuple[str, int]] = []
         self.status_calls = 0
 
@@ -32,4 +34,6 @@ class FakeConnector:
 
     def status(self) -> str:
         self.status_calls += 1
+        if self.status_delay > 0:
+            time.sleep(self.status_delay)
         return self._status

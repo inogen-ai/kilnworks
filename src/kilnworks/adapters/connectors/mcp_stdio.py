@@ -13,12 +13,11 @@ a threadpool thread (no running loop), so `asyncio.run` is safe.
 from __future__ import annotations
 
 import asyncio
-import os
 import re
 from datetime import timedelta
 
 from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
+from mcp.client.stdio import get_default_environment, stdio_client
 
 from kilnworks.core.models import (
     CONNECTOR_STATUS_DOWN,
@@ -41,6 +40,7 @@ class MCPStdioConnector:
         search_limit: int = 5,
         search_tool: str = "search",
         query_arg: str = "query",
+        limit_arg: str | None = "limit",
         extra_args: dict | None = None,
         timeout: float = 30.0,
     ):
@@ -50,6 +50,7 @@ class MCPStdioConnector:
         self._search_limit = search_limit
         self._search_tool = search_tool
         self._query_arg = query_arg
+        self._limit_arg = limit_arg
         self._extra_args = extra_args or {}
         self._timeout = timeout
 
@@ -67,21 +68,31 @@ class MCPStdioConnector:
     # -- async internals ---------------------------------------------------
 
     def _params(self) -> StdioServerParameters:
-        merged_env = {**os.environ, **self._env}
+        # Start from the mcp SDK's safe allowlist (PATH, HOME, USER, etc.) rather than
+        # the full parent environment -- inheriting os.environ verbatim would leak
+        # KILNWORKS_SECRET_KEY, KILNWORKS_DATABASE_URL, provider API keys, and
+        # KILNWORKS_OIDC_CLIENT_SECRET into every spawned connector server. Config's
+        # `${VAR}` expansion (done at registry load, in ConnectorRegistry.from_config)
+        # remains the deliberate way to pass specific secrets through via `self._env`.
+        env = {**get_default_environment(), **self._env}
         return StdioServerParameters(
             command=self._command[0],
             args=self._command[1:],
-            env=merged_env,
+            env=env,
         )
 
     async def _search_async(self, query: str, limit: int) -> list[ConnectorResult]:
         async def _run() -> list[ConnectorResult]:
+            args: dict = {self._query_arg: query}
+            if self._limit_arg is not None:
+                args[self._limit_arg] = limit
+            args.update(self._extra_args)
             async with stdio_client(self._params()) as (read, write):
                 async with ClientSession(read, write) as session:
                     await session.initialize()
                     result = await session.call_tool(
                         self._search_tool,
-                        {self._query_arg: query, "limit": limit, **self._extra_args},
+                        args,
                         read_timeout_seconds=timedelta(seconds=self._timeout),
                     )
             return self._adapt(self._text_of(result), limit)

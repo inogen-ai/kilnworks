@@ -14,6 +14,9 @@ from kilnworks.core.models import (  # noqa: E402
 
 STUB = str(Path(__file__).parent / "stub_mcp_server.py")
 HANG_STUB = str(Path(__file__).parent / "hang_mcp_server.py")
+ENV_ECHO_STUB = str(Path(__file__).parent / "env_echo_mcp_server.py")
+NO_LIMIT_STUB = str(Path(__file__).parent / "no_limit_mcp_server.py")
+ARGS_ECHO_STUB = str(Path(__file__).parent / "args_echo_mcp_server.py")
 
 
 def _connector(**kwargs) -> MCPStdioConnector:
@@ -110,3 +113,48 @@ def test_search_raises_within_timeout_when_server_hangs_on_initialize():
     elapsed = time.monotonic() - start
 
     assert elapsed < 5.0, f"search() took {elapsed:.3f}s, expected well under the 10s hang"
+
+
+def test_spawned_subprocess_env_excludes_parent_secrets(monkeypatch):
+    """The spawned connector server must not inherit the parent process's full
+    environment -- only the mcp SDK's safe allowlist plus whatever the connector's
+    own config explicitly sets via `env`. Otherwise every configured connector
+    server would receive KILNWORKS_SECRET_KEY, KILNWORKS_DATABASE_URL, provider API
+    keys, etc."""
+    monkeypatch.setenv("KILNWORKS_SECRET_KEY", "canary")
+    connector = MCPStdioConnector(
+        name="env-echo",
+        command=[sys.executable, ENV_ECHO_STUB],
+        env={"EXPLICITLY_CONFIGURED_VAR": "explicit-value"},
+    )
+
+    canary = connector.search("KILNWORKS_SECRET_KEY", 5)
+    explicit = connector.search("EXPLICITLY_CONFIGURED_VAR", 5)
+
+    assert canary[0].title == "KILNWORKS_SECRET_KEY=MISSING"
+    assert explicit[0].title == "EXPLICITLY_CONFIGURED_VAR=explicit-value"
+
+
+def test_search_with_limit_arg_none_omits_limit_from_tool_call():
+    """Some connector search tools don't accept a `limit` parameter at all --
+    unconditionally sending one would error on every call. `limit_arg=None` must
+    omit the limit key from the tool-call args entirely."""
+    connector = _connector(
+        name="no-limit", command=[sys.executable, NO_LIMIT_STUB], limit_arg=None
+    )
+
+    results = connector.search("hello", 5)
+
+    assert len(results) == 1
+    assert results[0].title == "Result for hello"
+
+
+def test_search_with_default_limit_arg_includes_limit_key():
+    """Sanity check for the previous test: the default limit_arg="limit" does send
+    a `limit` key -- confirming the omission in the prior test is actually the
+    `limit_arg=None` behavior kicking in, not a no-op."""
+    connector = _connector(name="args-echo", command=[sys.executable, ARGS_ECHO_STUB])
+
+    results = connector.search("hello", 5)
+
+    assert results[0].title == "keys=limit,query"
