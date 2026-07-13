@@ -41,6 +41,7 @@ def _process(job: Job, services: Services, queue: PgJobQueue, timeout_seconds: f
         Path(job.payload["path"]),
         acl_tags=job.payload.get("acl_tags", ["public"]),
         title=job.payload.get("title"),
+        media=services.media,
     )
     with _time_limit(timeout_seconds):
         report = services.ingestion.ingest(source, user_id=job.created_by)

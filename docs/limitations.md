@@ -75,3 +75,22 @@
   after the callback redirect — nothing scrubs it from the address bar/history. The
   standard compose topology always ships the UI, which consumes and scrubs it
   immediately.
+- **Vision/transcription extraction quality is model-dependent:** the description of an
+  image, or the transcript of an audio/video file, is only as accurate as the underlying
+  vision/Whisper model — smaller/local models (e.g. Ollama `llava`, a small
+  `faster-whisper` size) trade accuracy for being free and offline. There is no
+  confidence signal surfaced to distinguish a good extraction from a poor one.
+- **Video is transcript-only in v1:** ingesting an `.mp4`/`.mov` extracts and
+  transcribes its audio track; there is no frame-level visual retrieval (no OCR or
+  scene description on the video itself). Silent or non-speech video content produces
+  little or no searchable text.
+- **`ffmpeg` is required for video ingestion:** `.mp4`/`.mov` files need the system
+  `ffmpeg` binary on `PATH` to extract audio before transcription (`apt-get install
+  ffmpeg` / `brew install ffmpeg`); it is not bundled or pip-installable. Audio-only
+  formats (`.mp3`/`.wav`/`.m4a`) don't need it.
+- **Per-file media size cap:** `KILNWORKS_MAX_MEDIA_BYTES` (default 100 MiB) bounds any
+  single image/audio/video file; a larger file is rejected as a per-file failure rather
+  than truncated.
+- **Re-ingesting media re-runs the extraction:** there's no content-hash dedupe (see
+  above), so re-uploading the same image or audio/video file re-runs — and re-bills —
+  the vision/transcription call, not just the (free) embedding step.

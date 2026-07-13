@@ -67,9 +67,70 @@ Kilnworks defaults to OpenAI for both chat and embeddings. Two other flavors are
     uv run kilnworks init-db
     uv run kilnworks ingest examples/corpus
 
-Supported document types: Markdown, plain text, PDF, DOCX, and HTML.
+Supported document types: Markdown, plain text, PDF, DOCX, HTML, CSV, TSV, XLSX,
+images (PNG/JPG/GIF/WEBP), and audio/video (MP3/WAV/M4A/MP4/MOV). Images and audio/video
+need a vision/transcription provider configured — see
+[Multimodal ingestion](#multimodal-ingestion) below; everything else works offline with
+zero config.
 
     uv run kilnworks ask "What temperature does stoneware fire at?"
+
+## Multimodal ingestion
+
+Text, Markdown, PDF, DOCX, HTML, and tables (CSV/TSV/XLSX) all parse offline — no API
+keys, no config, nothing beyond the quickstart above. Images and audio/video are opt-in
+on top of that: each needs a provider configured, and each degrades gracefully when one
+isn't.
+
+**Images** (PNG/JPG/GIF/WEBP) are described by a vision model — the description
+(including any verbatim on-image text) becomes the document's searchable content. Set
+`KILNWORKS_VISION_PROVIDER` to one of:
+
+- `openai` — set `KILNWORKS_OPENAI_API_KEY` (shared with chat/embeddings).
+- `anthropic` — set `KILNWORKS_ANTHROPIC_API_KEY`.
+- `ollama` — **fully offline**, via a local `llava`-family model (`ollama pull llava`).
+
+`KILNWORKS_VISION_MODEL` defaults to `gpt-4o-mini`, an **OpenAI-specific model name** —
+it is the one shared model knob across all three vision providers (there's no
+per-provider split the way chat has `chat_model`/`anthropic_model`/`ollama_chat_model`).
+If you set `KILNWORKS_VISION_PROVIDER=anthropic`, override `KILNWORKS_VISION_MODEL` to a
+Claude model (e.g. `claude-opus-4-8`); if you set it to `ollama`, override it to a
+vision-capable Ollama model (e.g. `llava`). Leaving the default in place with a
+non-OpenAI provider will fail.
+
+**Audio/video** (MP3/WAV/M4A/MP4/MOV) are transcribed, with `[MM:SS]` timestamps
+prefixing each segment so citations point at roughly where in the recording an answer
+came from. Set `KILNWORKS_TRANSCRIPTION_PROVIDER` to one of:
+
+- `openai` — Whisper via the OpenAI API; set `KILNWORKS_OPENAI_API_KEY` and, optionally,
+  `KILNWORKS_TRANSCRIPTION_MODEL` (default `whisper-1`).
+- `local` — **fully offline**, via `faster-whisper` running on CPU; install it with
+  `pip install kilnworks[local-whisper]` (or `uv sync --extra local-whisper`) and set
+  `KILNWORKS_LOCAL_WHISPER_MODEL` (default `base`) to pick a model size.
+
+**Video ingestion requires `ffmpeg`** on `PATH` — it's used to extract the audio track
+before transcription (`apt-get install ffmpeg` on Debian/Ubuntu, `brew install ffmpeg`
+on macOS). Audio-only files (MP3/WAV/M4A) don't need it.
+
+`KILNWORKS_MAX_MEDIA_BYTES` (default `104857600`, 100 MiB) caps the size of any single
+image/audio/video file, checked before it's sent to a provider. This applies to CLI
+folder ingestion; uploads through the API/web UI are additionally bounded by
+`KILNWORKS_MAX_UPLOAD_BYTES` (default 25 MiB), and OpenAI's transcription endpoint caps
+files at 25 MB — so for large media, ingest via the CLI or use local transcription.
+
+**Graceful degradation:** if `KILNWORKS_VISION_PROVIDER`/`KILNWORKS_TRANSCRIPTION_PROVIDER`
+is left at its default of `none`, image/audio/video files aren't rejected outright —
+each one produces a clear per-file failure (e.g. "ingesting .png files requires
+KILNWORKS_VISION_PROVIDER to be configured") and the rest of the batch, including every
+text/table document, still ingests normally. Nothing about the
+[five-minute quickstart](#quickstart) above changes: text and tables work with zero media
+configuration.
+
+Vision and transcription calls are billable API usage, and Kilnworks records them in the
+per-user cost ledger under the `vision`/`transcription` contexts, attributed to whichever
+user's upload triggered the extraction — the same ledger that tracks chat and embedding
+spend. Re-ingesting a media file re-runs (and re-bills) the extraction; there's no
+content-hash dedupe yet (see [known limitations](docs/limitations.md)).
 
 ### Web UI development
 

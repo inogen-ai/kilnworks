@@ -95,10 +95,12 @@ def create_user_command(
 
 @app.command()
 def ingest(path: Path = typer.Argument(..., exists=True, file_okay=False, readable=True)) -> None:
-    """Ingest all supported files (.md .txt .pdf .docx .html .htm) under PATH."""
+    """Ingest all supported files under PATH — text/Markdown/PDF/DOCX/HTML/CSV/TSV/XLSX
+    plus images and audio/video if a vision/transcription provider is configured (see
+    README's "Multimodal ingestion" section)."""
     services = _services_or_exit()
     # provider errors surface per-document in report.failed; systemic outage -> exit 1 below
-    report = services.ingestion.ingest(LocalFolderSource(path))
+    report = services.ingestion.ingest(LocalFolderSource(path, media=services.media))
     typer.echo(f"Ingested {report.succeeded} document(s); {len(report.failed)} failed.")
     for uri, error in report.failed:
         typer.echo(f"  FAILED {uri}: {error}", err=True)

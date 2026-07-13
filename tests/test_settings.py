@@ -56,6 +56,26 @@ def test_oidc_settings_defaults(monkeypatch, tmp_path):
     assert settings.oidc_enabled is False
 
 
+def test_media_settings_defaults(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    settings = Settings()
+    assert settings.vision_provider == "none"
+    assert settings.vision_model == "gpt-4o-mini"
+    assert settings.transcription_provider == "none"
+    assert settings.transcription_model == "whisper-1"
+    assert settings.local_whisper_model == "base"
+    assert settings.max_media_bytes == 104_857_600
+
+
+def test_media_settings_read_kilnworks_env_prefix(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("KILNWORKS_VISION_PROVIDER", "openai")
+    monkeypatch.setenv("KILNWORKS_MAX_MEDIA_BYTES", "1000")
+    settings = Settings()
+    assert settings.vision_provider == "openai"
+    assert settings.max_media_bytes == 1000
+
+
 def test_oidc_enabled_requires_both_issuer_and_client_id(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     assert Settings(oidc_issuer="https://idp.test").oidc_enabled is False

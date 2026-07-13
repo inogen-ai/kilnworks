@@ -1,9 +1,20 @@
 import pytest
 
+from kilnworks.adapters.media.fake import FakeTranscriber, FakeVisionExtractor
+from kilnworks.adapters.media.transcribe_local import LocalWhisper
+from kilnworks.adapters.media.transcribe_openai import OpenAIWhisper
+from kilnworks.adapters.media.vision_anthropic import AnthropicVision
+from kilnworks.adapters.media.vision_ollama import OllamaVision
+from kilnworks.adapters.media.vision_openai import OpenAIVision
 from kilnworks.db.connection import connect, init_db
 from kilnworks.evals.runner import parse_verdict
 from kilnworks.settings import Settings
-from kilnworks.wiring import build_judge, build_services, build_services_with_conn
+from kilnworks.wiring import (
+    build_judge,
+    build_media_extractor,
+    build_services,
+    build_services_with_conn,
+)
 
 
 def test_build_services_raises_actionable_error_when_api_key_missing():
@@ -141,3 +152,202 @@ def test_validate_provider_settings_requires_paired_oidc_issuer_and_client_id(
         )
     with pytest.raises(ValueError, match="KILNWORKS_OIDC_CLIENT_ID"):
         validate_provider_settings(Settings(fake_providers=True, oidc_client_id="abc"))
+
+
+def test_build_media_extractor_fake_branch_returns_fake_vision_and_transcription(
+    tmp_path, monkeypatch
+):
+    monkeypatch.chdir(tmp_path)
+    media = build_media_extractor(Settings(fake_providers=True))
+    assert isinstance(media.vision, FakeVisionExtractor)
+    assert isinstance(media.transcription, FakeTranscriber)
+
+
+def test_build_media_extractor_default_providers_are_none(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    media = build_media_extractor(Settings(fake_providers=False, openai_api_key="sk-test"))
+    assert media.vision is None
+    assert media.transcription is None
+
+
+def test_build_media_extractor_threads_max_media_bytes(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    media = build_media_extractor(Settings(fake_providers=True, max_media_bytes=42))
+    assert media.max_bytes == 42
+
+
+def test_build_media_extractor_builds_openai_vision(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    media = build_media_extractor(
+        Settings(fake_providers=False, openai_api_key="sk-test", vision_provider="openai")
+    )
+    assert isinstance(media.vision, OpenAIVision)
+
+
+def test_build_media_extractor_builds_anthropic_vision(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    media = build_media_extractor(
+        Settings(
+            fake_providers=False,
+            openai_api_key="sk-test",
+            anthropic_api_key="sk-ant-test",
+            vision_provider="anthropic",
+        )
+    )
+    assert isinstance(media.vision, AnthropicVision)
+
+
+def test_build_media_extractor_builds_ollama_vision(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    media = build_media_extractor(
+        Settings(fake_providers=False, openai_api_key="sk-test", vision_provider="ollama")
+    )
+    assert isinstance(media.vision, OllamaVision)
+
+
+def test_build_media_extractor_rejects_unsupported_vision_provider(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(ValueError, match="unknown vision provider"):
+        build_media_extractor(
+            Settings(fake_providers=False, openai_api_key="sk-test", vision_provider="cohere")
+        )
+
+
+def test_validate_provider_settings_requires_openai_key_for_openai_vision(
+    tmp_path, monkeypatch
+):
+    monkeypatch.chdir(tmp_path)
+    from kilnworks.wiring import validate_provider_settings
+
+    with pytest.raises(ValueError, match="KILNWORKS_OPENAI_API_KEY"):
+        validate_provider_settings(
+            Settings(
+                openai_api_key="",
+                vision_provider="openai",
+                chat_provider="ollama",
+                embedding_provider="ollama",
+            )
+        )
+
+
+def test_validate_provider_settings_requires_anthropic_key_for_anthropic_vision(
+    tmp_path, monkeypatch
+):
+    monkeypatch.chdir(tmp_path)
+    from kilnworks.wiring import validate_provider_settings
+
+    with pytest.raises(ValueError, match="KILNWORKS_ANTHROPIC_API_KEY"):
+        validate_provider_settings(
+            Settings(
+                anthropic_api_key="",
+                vision_provider="anthropic",
+                chat_provider="ollama",
+                embedding_provider="ollama",
+            )
+        )
+
+
+def test_validate_provider_settings_ollama_vision_needs_no_credentials(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    from kilnworks.wiring import validate_provider_settings
+
+    validate_provider_settings(
+        Settings(chat_provider="ollama", embedding_provider="ollama", vision_provider="ollama")
+    )
+
+
+def test_validate_provider_settings_rejects_unknown_vision_provider(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    from kilnworks.wiring import validate_provider_settings
+
+    with pytest.raises(ValueError, match="unknown vision provider"):
+        validate_provider_settings(Settings(vision_provider="cohere"))
+
+
+def test_build_media_extractor_builds_openai_whisper(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    media = build_media_extractor(
+        Settings(
+            fake_providers=False,
+            openai_api_key="sk-test",
+            transcription_provider="openai",
+        )
+    )
+    assert isinstance(media.transcription, OpenAIWhisper)
+
+
+def test_build_media_extractor_builds_local_whisper_when_installed(tmp_path, monkeypatch):
+    import sys
+    from types import ModuleType
+
+    monkeypatch.chdir(tmp_path)
+    fake_module = ModuleType("faster_whisper")
+    fake_module.WhisperModel = object  # presence check only; never constructed here
+    monkeypatch.setitem(sys.modules, "faster_whisper", fake_module)
+
+    media = build_media_extractor(
+        Settings(fake_providers=False, openai_api_key="sk-test", transcription_provider="local")
+    )
+    assert isinstance(media.transcription, LocalWhisper)
+
+
+def test_build_media_extractor_local_whisper_missing_package_raises_clear_error(
+    tmp_path, monkeypatch
+):
+    import sys
+
+    monkeypatch.chdir(tmp_path)
+    # A `None` entry in sys.modules makes `import faster_whisper` raise ImportError,
+    # the standard way to simulate "package not installed" without real absence
+    # (faster-whisper genuinely isn't installed in this environment anyway, but this
+    # keeps the test robust regardless of the base install's optional extras).
+    monkeypatch.setitem(sys.modules, "faster_whisper", None)
+
+    with pytest.raises(ValueError, match="local-whisper"):
+        build_media_extractor(
+            Settings(
+                fake_providers=False, openai_api_key="sk-test", transcription_provider="local"
+            )
+        )
+
+
+def test_build_media_extractor_rejects_unknown_transcription_provider(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(ValueError, match="unknown transcription provider"):
+        build_media_extractor(
+            Settings(
+                fake_providers=False,
+                openai_api_key="sk-test",
+                transcription_provider="cohere",
+            )
+        )
+
+
+def test_validate_provider_settings_requires_openai_key_for_openai_transcription(
+    tmp_path, monkeypatch
+):
+    monkeypatch.chdir(tmp_path)
+    from kilnworks.wiring import validate_provider_settings
+
+    with pytest.raises(ValueError, match="KILNWORKS_OPENAI_API_KEY"):
+        validate_provider_settings(
+            Settings(
+                openai_api_key="",
+                transcription_provider="openai",
+                chat_provider="ollama",
+                embedding_provider="ollama",
+            )
+        )
+
+
+def test_build_services_prepared_wires_media_extractor(pg_url):
+    conn = connect(pg_url)
+    init_db(conn)
+    from kilnworks.wiring import build_services_prepared
+
+    services = build_services_prepared(
+        Settings(database_url=pg_url, fake_providers=True, openai_api_key=""), conn
+    )
+    assert isinstance(services.media.vision, FakeVisionExtractor)
+    assert isinstance(services.media.transcription, FakeTranscriber)
+    conn.close()

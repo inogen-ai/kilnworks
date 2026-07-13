@@ -39,6 +39,12 @@ class Settings(BaseSettings):
     oidc_client_secret: str = ""
     oidc_groups_claim: str = "groups"
     oidc_scopes: str = "openid email profile"
+    vision_provider: str = "none"
+    vision_model: str = "gpt-4o-mini"
+    transcription_provider: str = "none"
+    transcription_model: str = "whisper-1"
+    local_whisper_model: str = "base"
+    max_media_bytes: int = 104_857_600
 
     @property
     def oidc_enabled(self) -> bool:

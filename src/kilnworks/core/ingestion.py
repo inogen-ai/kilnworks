@@ -31,6 +31,22 @@ class IngestionService:
                 continue
             doc = item
             try:
+                if self._cost:
+                    for completion in doc.extraction_usage:
+                        # Vision/transcription usage was already spent inside the
+                        # source's parse_file call, before this document ever reached
+                        # the service; recorded here (the one place with `user_id`)
+                        # regardless of whether persistence below later fails.
+                        # `completion.context` was tagged by parse_file ("vision" or
+                        # "transcription") so the two extraction kinds land in the
+                        # ledger under their own kind/context rather than both being
+                        # mislabeled "vision".
+                        context = completion.context or "vision"
+                        self._cost.record_cost(
+                            context, completion.model,
+                            completion.input_tokens, completion.output_tokens,
+                            context, user_id=user_id,
+                        )
                 spans = self._chunker.chunk(doc.text)
                 batch = None
                 if spans:

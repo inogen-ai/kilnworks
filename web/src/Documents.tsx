@@ -115,7 +115,7 @@ export default function Documents({
         <input
           ref={fileRef}
           type="file"
-          accept=".md,.txt,.pdf,.docx,.html,.htm"
+          accept=".md,.txt,.pdf,.docx,.html,.htm,.csv,.tsv,.xlsx,.png,.jpg,.jpeg,.gif,.webp,.mp3,.wav,.m4a,.mp4,.mov"
           hidden
           onChange={(e) => e.target.files?.[0] && void handleUpload(e.target.files[0])}
         />

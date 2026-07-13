@@ -7,12 +7,28 @@ DOC_STATUS_READY = "ready"
 DOC_STATUS_FAILED = "failed"
 
 
+class Completion(BaseModel):
+    text: str
+    model: str = ""
+    input_tokens: int = 0
+    output_tokens: int = 0
+    # Set by `parse_file` on vision/transcription extraction Completions ("vision" or
+    # "transcription") so `IngestionService.ingest` can record accurate cost context
+    # without threading extra state through `Document.extraction_usage`. Empty ("") for
+    # ordinary chat/embedding Completions, which never travel through extraction_usage.
+    context: str = ""
+
+
 class Document(BaseModel):
     id: UUID = Field(default_factory=uuid4)
     source_uri: str
     title: str
     text: str
     acl_tags: list[str] = ["public"]
+    # Completions spent extracting `text` from non-text media (vision/transcription),
+    # attached here so `IngestionService.ingest` — the one place that knows the
+    # ingesting `user_id` — can record their cost. Empty for text/tables/pdf/etc.
+    extraction_usage: list[Completion] = []
 
 
 class Chunk(BaseModel):
@@ -56,10 +72,3 @@ class IngestReport(BaseModel):
 class EmbeddingBatch(BaseModel):
     vectors: list[list[float]]
     total_tokens: int = 0
-
-
-class Completion(BaseModel):
-    text: str
-    model: str = ""
-    input_tokens: int = 0
-    output_tokens: int = 0

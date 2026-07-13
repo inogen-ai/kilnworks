@@ -1,8 +1,14 @@
+from pathlib import Path
+
 from kilnworks.adapters.embedders.fake import FakeEmbedder
+from kilnworks.adapters.media.fake import FakeTranscriber, FakeVisionExtractor
 from kilnworks.adapters.pgvector_store import PgVectorStore
 from kilnworks.adapters.sources.localfolder import LocalFolderSource
 from kilnworks.core.chunking import HeadingAwareChunker
 from kilnworks.core.ingestion import IngestionService
+from kilnworks.core.ports import MediaExtractor
+
+FIXTURES_DIR = Path(__file__).parent.parent / "fixtures"
 
 
 class ExplodingEmbedder(FakeEmbedder):
@@ -113,6 +119,66 @@ def test_ingest_records_embedding_cost_per_document(conn, tmp_path):
     service.ingest(LocalFolderSource(tmp_path))
     assert len(cost.events) == 2
     assert all(event[0] == "embedding" and event[4] == "ingest" for event in cost.events)
+
+
+def test_ingest_records_vision_cost_attributed_to_user(conn, tmp_path):
+    dest = tmp_path / "photo.png"
+    dest.write_bytes((FIXTURES_DIR / "sample.png").read_bytes())
+    media = MediaExtractor(vision=FakeVisionExtractor(reply="a kiln photo"))
+    cost = RecordingCost()
+    service = IngestionService(
+        store=PgVectorStore(conn),
+        chunker=HeadingAwareChunker(),
+        embedder=FakeEmbedder(),
+        cost=cost,
+    )
+    report = service.ingest(LocalFolderSource(tmp_path, media=media), user_id="user-42")
+    assert report.succeeded == 1
+    vision_events = [e for e in cost.events if e[0] == "vision"]
+    assert len(vision_events) == 1
+    kind, model, input_tokens, output_tokens, context, user_id = vision_events[0]
+    assert model == "fake"
+    assert input_tokens == 1 and output_tokens >= 1
+    assert context == "vision"
+    assert user_id == "user-42"
+
+
+def test_ingest_records_transcription_cost_attributed_to_user(conn, tmp_path):
+    """M6 Task 4: transcription usage must land under context "transcription", not
+    the "vision" context Task 3 hard-coded for every extraction_usage entry."""
+    dest = tmp_path / "clip.wav"
+    dest.write_bytes((FIXTURES_DIR / "sample.wav").read_bytes())
+    media = MediaExtractor(transcription=FakeTranscriber(reply="a kiln recording"))
+    cost = RecordingCost()
+    service = IngestionService(
+        store=PgVectorStore(conn),
+        chunker=HeadingAwareChunker(),
+        embedder=FakeEmbedder(),
+        cost=cost,
+    )
+    report = service.ingest(LocalFolderSource(tmp_path, media=media), user_id="user-42")
+    assert report.succeeded == 1
+    transcription_events = [e for e in cost.events if e[0] == "transcription"]
+    assert len(transcription_events) == 1
+    kind, model, input_tokens, output_tokens, context, user_id = transcription_events[0]
+    assert model == "fake"
+    assert context == "transcription"
+    assert user_id == "user-42"
+    # and it must NOT have been mislabeled "vision"
+    assert [e for e in cost.events if e[0] == "vision"] == []
+
+
+def test_ingest_text_only_document_records_no_vision_cost(conn, tmp_path):
+    (tmp_path / "notes.md").write_text("plain text, no media")
+    cost = RecordingCost()
+    service = IngestionService(
+        store=PgVectorStore(conn),
+        chunker=HeadingAwareChunker(),
+        embedder=FakeEmbedder(),
+        cost=cost,
+    )
+    service.ingest(LocalFolderSource(tmp_path), user_id="user-1")
+    assert [e[0] for e in cost.events] == ["embedding"]  # no "vision" event
 
 
 def test_source_failures_land_in_report_and_batch_continues(conn, tmp_path):

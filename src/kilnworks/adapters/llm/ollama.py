@@ -41,7 +41,7 @@ class OllamaChat:
             )
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
-            raise _translate_status(exc) from exc
+            raise translate_status(exc) from exc
         except httpx.TransportError as exc:
             raise TransientProviderError("ollama", str(exc)) from exc
         try:
@@ -93,7 +93,7 @@ class OllamaChat:
                     input_tokens = line_data.get("prompt_eval_count", 0)
                     output_tokens = line_data.get("eval_count", 0)
         except httpx.HTTPStatusError as exc:
-            raise _translate_status(exc) from exc
+            raise translate_status(exc) from exc
         except httpx.TransportError as exc:
             raise TransientProviderError("ollama", str(exc)) from exc
         except ValueError as exc:  # malformed JSONL line from a proxy or crashed daemon
@@ -109,7 +109,7 @@ class OllamaChat:
         return events
 
 
-def _translate_status(exc: httpx.HTTPStatusError) -> ProviderError:
+def translate_status(exc: httpx.HTTPStatusError) -> ProviderError:
     status = exc.response.status_code
     detail = str(exc)
     if exc.response.text:  # Ollama puts the useful hint ("try pulling it") in the body
