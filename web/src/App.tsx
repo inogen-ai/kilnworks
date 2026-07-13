@@ -4,6 +4,7 @@ import { parseAuthFragment } from "./api";
 import Chat from "./Chat";
 import Login from "./Login";
 import Sources, { emptyCatalog, emptySelection, type Catalog, type Selection } from "./Sources";
+import Wordmark from "./Wordmark";
 
 // Parsed and scrubbed exactly once at module load: as a useState lazy initializer,
 // StrictMode's dev double-invoke would re-parse the already-scrubbed (empty) hash on
@@ -44,7 +45,7 @@ export default function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <span className="wordmark">Kilnworks</span>
+        <Wordmark />
         <button className="ghost" onClick={handleLogout}>
           Log out
         </button>

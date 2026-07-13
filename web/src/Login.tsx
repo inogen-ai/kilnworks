@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 
 import { getAuthConfig, login } from "./api";
+import Wordmark from "./Wordmark";
 
 export default function Login({
   onLogin,
@@ -37,7 +38,7 @@ export default function Login({
   return (
     <div className="login-wrap">
       <form className="login-card" onSubmit={handleSubmit}>
-        <h1 className="wordmark">Kilnworks</h1>
+        <Wordmark as="h1" />
         <p className="tagline">Ask your documents.</p>
         <input
           type="email"
