@@ -12,7 +12,7 @@ from kilnworks.core.models import (
     RetrievedChunk,
 )
 
-_SEARCH_SQL = f"""
+_SEARCH_SQL_BASE = f"""
 SELECT c.id, c.document_id, c.ordinal, c.text, c.heading_path, c.acl_tags,
        d.source_uri, d.title,
        1 - (c.embedding <=> %(embedding)s) AS score
@@ -20,6 +20,15 @@ FROM chunks c
 JOIN documents d ON d.id = c.document_id
 WHERE c.acl_tags && %(principals)s::text[]
   AND d.status = '{DOC_STATUS_READY}'
+"""
+
+_SEARCH_SQL = f"""{_SEARCH_SQL_BASE}
+ORDER BY c.embedding <=> %(embedding)s
+LIMIT %(limit)s
+"""
+
+_SEARCH_SQL_SCOPED = f"""{_SEARCH_SQL_BASE}
+  AND c.document_id = ANY(%(source_ids)s)
 ORDER BY c.embedding <=> %(embedding)s
 LIMIT %(limit)s
 """
@@ -101,16 +110,23 @@ class PgVectorStore:
             )
 
     def search(
-        self, embedding: Sequence[float], principals: Sequence[str], limit: int = 8
+        self,
+        embedding: Sequence[float],
+        principals: Sequence[str],
+        limit: int = 8,
+        source_ids: Sequence[UUID] | None = None,
     ) -> list[RetrievedChunk]:
-        rows = self._conn.execute(
-            _SEARCH_SQL,
-            {
-                "embedding": Vector(list(embedding)),
-                "principals": list(principals),
-                "limit": limit,
-            },
-        ).fetchall()
+        params = {
+            "embedding": Vector(list(embedding)),
+            "principals": list(principals),
+            "limit": limit,
+        }
+        if source_ids is None:
+            sql = _SEARCH_SQL
+        else:
+            sql = _SEARCH_SQL_SCOPED
+            params["source_ids"] = list(source_ids)
+        rows = self._conn.execute(sql, params).fetchall()
         return [
             RetrievedChunk(
                 id=row[0],

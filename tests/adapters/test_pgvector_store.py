@@ -85,6 +85,41 @@ def test_search_excludes_chunks_of_non_ready_documents(conn):
     assert {hit.document_id for hit in hits} == {ready_id}
 
 
+def test_search_scoped_to_source_ids_returns_only_those_docs(conn):
+    store, embedder = PgVectorStore(conn), FakeEmbedder()
+    x_id = _seed(store, embedder, "kiln firing schedule for doc x", ["public"])
+    _seed(store, embedder, "kiln firing schedule for doc y", ["public"])
+    hits = store.search(
+        embedder.embed(["kiln firing schedule"]).vectors[0],
+        ["public"],
+        10,
+        source_ids=[x_id],
+    )
+    assert hits
+    assert {hit.document_id for hit in hits} == {x_id}
+
+
+def test_search_scoping_never_widens_acl(conn):
+    store, embedder = PgVectorStore(conn), FakeEmbedder()
+    z_id = _seed(store, embedder, "sales pipeline forecast", ["sales"])
+    hits = store.search(
+        embedder.embed(["sales pipeline forecast"]).vectors[0],
+        ["public"],
+        10,
+        source_ids=[z_id],
+    )
+    assert hits == []
+
+
+def test_search_none_source_ids_is_unchanged(conn):
+    store, embedder = PgVectorStore(conn), FakeEmbedder()
+    doc_id = _seed(store, embedder, "unscoped search behaves as before", ["public"])
+    hits = store.search(
+        embedder.embed(["unscoped search behaves as before"]).vectors[0], ["public"], 10
+    )
+    assert any(hit.document_id == doc_id for hit in hits)
+
+
 def test_search_result_carries_document_metadata(conn):
     store, embedder = PgVectorStore(conn), FakeEmbedder()
     _seed(store, embedder, "observability guide", ["public"])

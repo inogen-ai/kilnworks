@@ -43,7 +43,11 @@ class VectorIndex(Protocol):
     ) -> None: ...
 
     def search(
-        self, embedding: Sequence[float], principals: Sequence[str], limit: int = 8
+        self,
+        embedding: Sequence[float],
+        principals: Sequence[str],
+        limit: int = 8,
+        source_ids: Sequence[UUID] | None = None,
     ) -> list[RetrievedChunk]: ...
 
     def delete_document_chunks(self, document_id: UUID) -> None: ...
