@@ -85,9 +85,10 @@
   scene description on the video itself). Silent or non-speech video content produces
   little or no searchable text.
 - **`ffmpeg` is required for video ingestion:** `.mp4`/`.mov` files need the system
-  `ffmpeg` binary on `PATH` to extract audio before transcription (`apt-get install
-  ffmpeg` / `brew install ffmpeg`); it is not bundled or pip-installable. Audio-only
-  formats (`.mp3`/`.wav`/`.m4a`) don't need it.
+  `ffmpeg` binary on `PATH` to extract audio before transcription. The official Docker
+  image bundles it; a non-Docker install must add it (`apt-get install ffmpeg` /
+  `brew install ffmpeg`) — it is not pip-installable. Audio-only formats
+  (`.mp3`/`.wav`/`.m4a`) don't need it.
 - **Per-file media size cap:** `KILNWORKS_MAX_MEDIA_BYTES` (default 100 MiB) bounds any
   single image/audio/video file; a larger file is rejected as a per-file failure rather
   than truncated.

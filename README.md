@@ -109,8 +109,10 @@ came from. Set `KILNWORKS_TRANSCRIPTION_PROVIDER` to one of:
   `KILNWORKS_LOCAL_WHISPER_MODEL` (default `base`) to pick a model size.
 
 **Video ingestion requires `ffmpeg`** on `PATH` — it's used to extract the audio track
-before transcription (`apt-get install ffmpeg` on Debian/Ubuntu, `brew install ffmpeg`
-on macOS). Audio-only files (MP3/WAV/M4A) don't need it.
+before transcription. The official Docker image bundles it, so Docker Compose users
+need nothing extra; for a non-Docker install, add it yourself (`apt-get install ffmpeg`
+on Debian/Ubuntu, `brew install ffmpeg` on macOS). Audio-only files (MP3/WAV/M4A) don't
+need it.
 
 `KILNWORKS_MAX_MEDIA_BYTES` (default `104857600`, 100 MiB) caps the size of any single
 image/audio/video file, checked before it's sent to a provider. This applies to CLI

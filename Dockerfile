@@ -17,6 +17,12 @@ RUN npm run build
 
 FROM python:3.12-slim-bookworm
 WORKDIR /app
+# ffmpeg extracts the audio track from uploaded video (.mp4/.mov) before it is
+# transcribed; without it, video ingestion fails per-file at runtime. Audio,
+# image, and table ingestion do not need it. Installed here (not in the uv
+# builder stage) so it lands in the final runtime image.
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
 RUN useradd --create-home kiln && mkdir -p /data && chown kiln:kiln /data
 COPY --from=builder --chown=kiln:kiln /app /app
 COPY --from=webbuilder --chown=kiln:kiln /web/dist /app/web/dist
