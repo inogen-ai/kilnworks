@@ -1,11 +1,8 @@
 name: Deploy Pages
 
 on:
-  # Auto-deploy on push is intentionally OFF until launch, so pushing to the
-  # (private) repo never publishes the site to kilnworks.inogen.ai. At flip time,
-  # re-enable the push trigger below (or just run this workflow manually once).
-  #   push:
-  #     branches: [main]
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
