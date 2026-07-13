@@ -219,6 +219,13 @@ def _build_transcription(settings: Settings) -> Transcriber | None:
 
 def build_media_extractor(settings: Settings) -> MediaExtractor:
     if settings.fake_providers:
+        # The fakes stub only the vision/transcription *API* calls. Video ingestion
+        # still runs the uploaded .mp4/.mov through the real ffmpeg binary (in
+        # parse_file's _extract_media) to extract an audio track before the fake
+        # transcriber sees it — so under KILNWORKS_FAKE_PROVIDERS video needs both
+        # ffmpeg installed and a genuinely decodable file. Fakes make images and audio
+        # fully self-contained; video alone still needs ffmpeg. (Text and tables never
+        # call a provider at all, so they need neither a key nor the fakes.)
         return MediaExtractor(
             vision=FakeVisionExtractor(),
             transcription=FakeTranscriber(),

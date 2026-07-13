@@ -1,4 +1,5 @@
 import csv
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -20,6 +21,15 @@ SUPPORTED_SUFFIXES = (
     TEXT_SUFFIXES | PARSED_SUFFIXES | TABLE_SUFFIXES | IMAGE_SUFFIXES | MEDIA_SUFFIXES
 )
 MAX_TEXT_CHARS = 10_000_000
+# Raw byte ceiling for CSV/TSV files, checked before parsing. The streaming line
+# guard (_join_capped) can't help against a single row with no newline: csv.reader
+# materializes a whole row before _rows_to_lines ever sees it, so millions of
+# delimited fields in one line would balloon memory first. Set well above any table
+# that could render under MAX_TEXT_CHARS (CSV text renders on the same order as its
+# raw bytes), so legitimate tables are never rejected. XLSX is exempt — its
+# cell/column format limits bound a single row, and its compressed size on disk
+# doesn't reflect the decompressed content anyway.
+MAX_TABLE_BYTES = 4 * MAX_TEXT_CHARS
 
 _IMAGE_MIME_TYPES = {
     ".png": "image/png",
@@ -163,7 +173,16 @@ def _parse_html(path: Path) -> str:
     return "\n\n".join(soup.stripped_strings)
 
 
+def _check_table_size(path: Path) -> None:
+    size = path.stat().st_size
+    if size > MAX_TABLE_BYTES:
+        raise ValueError(
+            f"document too large: table file is {size} bytes, exceeding {MAX_TABLE_BYTES}"
+        )
+
+
 def _parse_csv(path: Path) -> str:
+    _check_table_size(path)
     with path.open(encoding="utf-8", newline="") as handle:
         sample = handle.read(8192)
         handle.seek(0)
@@ -171,14 +190,16 @@ def _parse_csv(path: Path) -> str:
             delimiter = csv.Sniffer().sniff(sample, delimiters=",;\t|").delimiter
         except csv.Error:
             delimiter = ","
-        rows = list(csv.reader(handle, delimiter=delimiter))
-    return _rows_to_text(rows)
+        # Stream rows straight into the capped join: a multi-GB CSV is bounded to
+        # MAX_TEXT_CHARS of memory and rejected mid-parse, rather than fully
+        # materialized via list(csv.reader(...)) before the size check runs.
+        return _join_capped(_rows_to_lines(csv.reader(handle, delimiter=delimiter)))
 
 
 def _parse_tsv(path: Path) -> str:
+    _check_table_size(path)
     with path.open(encoding="utf-8", newline="") as handle:
-        rows = list(csv.reader(handle, delimiter="\t"))
-    return _rows_to_text(rows)
+        return _join_capped(_rows_to_lines(csv.reader(handle, delimiter="\t")))
 
 
 def _parse_xlsx(path: Path) -> str:
@@ -186,42 +207,72 @@ def _parse_xlsx(path: Path) -> str:
     # workbook into memory; data_only surfaces cached formula results.
     workbook = load_workbook(path, read_only=True, data_only=True)
     try:
-        sections = []
-        for sheet in workbook.worksheets:
-            rows = [[_cell_to_str(v) for v in row] for row in sheet.iter_rows(values_only=True)]
-            sheet_text = _rows_to_text(rows)
-            if sheet_text:
-                sections.append(f"# Sheet: {sheet.title}\n{sheet_text}")
-        return "\n\n".join(sections)
+        return _join_capped(_xlsx_lines(workbook))
     finally:
         workbook.close()
+
+
+def _xlsx_lines(workbook) -> Iterator[str]:
+    """Yield the rendered lines for every non-empty sheet, prefixing each with a
+    `# Sheet: <title>` header and a blank separator line between sheets. Streams
+    sheet-by-sheet and row-by-row so a huge workbook never fully materializes."""
+    first = True
+    for sheet in workbook.worksheets:
+        rows = (
+            [_cell_to_str(value) for value in row]
+            for row in sheet.iter_rows(values_only=True)
+        )
+        lines = _rows_to_lines(rows)
+        head = next(lines, None)
+        if head is None:
+            continue  # no non-empty data rows: omit the sheet (and its header) entirely
+        if not first:
+            yield ""  # blank line -> "\n\n" separator between sheets
+        first = False
+        yield f"# Sheet: {sheet.title}"
+        yield head
+        yield from lines
 
 
 def _cell_to_str(value: object) -> str:
     return "" if value is None else str(value)
 
 
-def _rows_to_text(rows: list[list[str]]) -> str:
-    """Render rows as `label: value | label: value ...` using the first
-    non-empty row as the header; falls back to positional `colN` labels
-    wherever a header cell is blank or missing. Blank cells and fully-empty
-    rows are skipped.
-    """
-    non_empty_rows = [row for row in rows if any(cell.strip() for cell in row)]
-    if not non_empty_rows:
-        return ""
-
-    header, data_rows = non_empty_rows[0], non_empty_rows[1:]
-    lines = []
-    for row in data_rows:
+def _rows_to_lines(rows: Iterable[list[str]]) -> Iterator[str]:
+    """Yield `label: value | label: value ...` lines from an iterable of rows,
+    using the first non-empty row as the header and positional `colN` labels
+    wherever a header cell is blank or missing. Blank cells and fully-empty rows
+    are skipped. Streams — never materializes all rows — so the caller can bound
+    total output size while parsing."""
+    header: list[str] | None = None
+    for row in rows:
+        if not any(cell.strip() for cell in row):
+            continue
+        if header is None:
+            header = row
+            continue
         parts = [
             f"{_column_label(header, index)}: {value}"
             for index, cell in enumerate(row)
             if (value := cell.strip())
         ]
         if parts:
-            lines.append(" | ".join(parts))
-    return "\n".join(lines)
+            yield " | ".join(parts)
+
+
+def _join_capped(lines: Iterable[str]) -> str:
+    """Join streamed lines with newlines, raising as soon as the accumulated
+    length would exceed MAX_TEXT_CHARS. This rejects an oversized table while
+    parsing — bounding memory — instead of after building the whole string.
+    Reads the module global at call time so tests can lower the cap."""
+    out: list[str] = []
+    total = 0
+    for line in lines:
+        total += len(line) + (1 if out else 0)  # +1 for the joining newline
+        if total > MAX_TEXT_CHARS:
+            raise ValueError(f"document too large: table exceeds {MAX_TEXT_CHARS} chars")
+        out.append(line)
+    return "\n".join(out)
 
 
 def _column_label(header: list[str], index: int) -> str:

@@ -155,6 +155,41 @@ def test_xlsx_over_cap_is_rejected(tmp_path, monkeypatch):
         parse_file(FIXTURES_DIR / "sample.xlsx")
 
 
+def test_csv_over_cap_is_rejected_while_parsing(tmp_path, monkeypatch):
+    """A giant table must be rejected mid-parse by the streaming size guard, not
+    only after the whole string is built (which would balloon memory first). The
+    'table exceeds' message is unique to the streaming path (`_join_capped`)."""
+    from kilnworks.adapters.sources import parsers
+
+    monkeypatch.setattr(parsers, "MAX_TEXT_CHARS", 20)
+    big = "h1,h2\n" + "aaaa,bbbb\n" * 200  # rendered output far exceeds 20 chars
+    (tmp_path / "big.csv").write_text(big, encoding="utf-8")
+    with pytest.raises(ValueError, match="table exceeds"):
+        parse_file(tmp_path / "big.csv")
+
+
+def test_tsv_over_cap_is_rejected_while_parsing(tmp_path, monkeypatch):
+    from kilnworks.adapters.sources import parsers
+
+    monkeypatch.setattr(parsers, "MAX_TEXT_CHARS", 20)
+    big = "h1\th2\n" + "aaaa\tbbbb\n" * 200
+    (tmp_path / "big.tsv").write_text(big, encoding="utf-8")
+    with pytest.raises(ValueError, match="table exceeds"):
+        parse_file(tmp_path / "big.tsv")
+
+
+def test_csv_over_raw_byte_cap_is_rejected_before_parsing(tmp_path, monkeypatch):
+    """A single long row with no newline can't be caught by the streaming line
+    guard — csv.reader materializes the whole row first — so an oversized table
+    file is rejected up front by raw byte size."""
+    from kilnworks.adapters.sources import parsers
+
+    monkeypatch.setattr(parsers, "MAX_TABLE_BYTES", 50)
+    (tmp_path / "wide.csv").write_bytes(b"a,b,c," * 100)  # ~600 bytes, one newline-less row
+    with pytest.raises(ValueError, match="table file is"):
+        parse_file(tmp_path / "wide.csv")
+
+
 def test_csv_with_unsniffable_content_falls_back_to_comma(tmp_path):
     """A single-column or prose-like CSV makes csv.Sniffer raise; the parser must fall
     back to comma rather than crash (regression — this path had no coverage)."""

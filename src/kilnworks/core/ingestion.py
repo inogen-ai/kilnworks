@@ -37,6 +37,10 @@ class IngestionService:
                         # source's parse_file call, before this document ever reached
                         # the service; recorded here (the one place with `user_id`)
                         # regardless of whether persistence below later fails.
+                        # Extraction is not cached across runs: re-ingesting the same
+                        # media file re-invokes the provider and bills again (see
+                        # docs/limitations.md) — the store is only reached below, after
+                        # the cost has already been incurred upstream.
                         # `completion.context` was tagged by parse_file ("vision" or
                         # "transcription") so the two extraction kinds land in the
                         # ledger under their own kind/context rather than both being
