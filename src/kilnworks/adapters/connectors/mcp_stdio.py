@@ -75,23 +75,35 @@ class MCPStdioConnector:
         )
 
     async def _search_async(self, query: str, limit: int) -> list[ConnectorResult]:
-        async with stdio_client(self._params()) as (read, write):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                result = await session.call_tool(
-                    self._search_tool,
-                    {self._query_arg: query, "limit": limit, **self._extra_args},
-                    read_timeout_seconds=timedelta(seconds=self._timeout),
-                )
-        return self._adapt(self._text_of(result), limit)
+        async def _run() -> list[ConnectorResult]:
+            async with stdio_client(self._params()) as (read, write):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+                    result = await session.call_tool(
+                        self._search_tool,
+                        {self._query_arg: query, "limit": limit, **self._extra_args},
+                        read_timeout_seconds=timedelta(seconds=self._timeout),
+                    )
+            return self._adapt(self._text_of(result), limit)
+
+        # The whole spawn+initialize+call sequence is bounded by one deadline, not
+        # just the individual call_tool read. A stalled server (e.g. hung during
+        # initialize()) would otherwise hang this coroutine forever. wait_for wraps
+        # the *entire* async-with block so a timeout cancels the coroutine while
+        # it's still inside it, letting stdio_client/ClientSession __aexit__ run and
+        # tear down the subprocess instead of leaking it.
+        return await asyncio.wait_for(_run(), timeout=self._timeout)
 
     async def _status_async(self) -> str:
-        async with stdio_client(self._params()) as (read, write):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                tools = await session.list_tools()
-        names = {tool.name for tool in tools.tools}
-        return CONNECTOR_STATUS_READY if self._search_tool in names else CONNECTOR_STATUS_DOWN
+        async def _run() -> str:
+            async with stdio_client(self._params()) as (read, write):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+                    tools = await session.list_tools()
+            names = {tool.name for tool in tools.tools}
+            return CONNECTOR_STATUS_READY if self._search_tool in names else CONNECTOR_STATUS_DOWN
+
+        return await asyncio.wait_for(_run(), timeout=self._timeout)
 
     # -- text adaptation ---------------------------------------------------
 

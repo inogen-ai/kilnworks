@@ -1,4 +1,5 @@
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -12,6 +13,7 @@ from kilnworks.core.models import (  # noqa: E402
 )
 
 STUB = str(Path(__file__).parent / "stub_mcp_server.py")
+HANG_STUB = str(Path(__file__).parent / "hang_mcp_server.py")
 
 
 def _connector(**kwargs) -> MCPStdioConnector:
@@ -73,3 +75,38 @@ def test_status_down_when_command_unspawnable():
     )
 
     assert connector.status() == CONNECTOR_STATUS_DOWN
+
+
+def test_status_down_within_timeout_when_server_hangs_on_initialize():
+    """A server that spawns but stalls during initialize() is not an exception --
+    it must be bounded by an overall timeout, not hang forever."""
+    connector = MCPStdioConnector(
+        name="hang", command=[sys.executable, HANG_STUB], env={}, timeout=0.3
+    )
+
+    start = time.monotonic()
+    status = connector.status()
+    elapsed = time.monotonic() - start
+
+    assert status == CONNECTOR_STATUS_DOWN
+    # mcp's stdio_client teardown SIGTERMs the child and grants it up to a further
+    # ~2s grace period to exit before SIGKILL, on top of our own timeout -- so the
+    # bound here is our timeout plus that grace period, not just our timeout, but
+    # it must still land well under the server's 10s stall.
+    assert elapsed < 5.0, f"status() took {elapsed:.3f}s, expected well under the 10s hang"
+
+
+def test_search_raises_within_timeout_when_server_hangs_on_initialize():
+    """search() against a stalled server must not hang forever either -- it should
+    time out (and let the caller, e.g. query.py's connector selection, handle it)
+    well before the server's 10s stall would resolve."""
+    connector = MCPStdioConnector(
+        name="hang", command=[sys.executable, HANG_STUB], env={}, timeout=0.3
+    )
+
+    start = time.monotonic()
+    with pytest.raises(TimeoutError):
+        connector.search("hello", 5)
+    elapsed = time.monotonic() - start
+
+    assert elapsed < 5.0, f"search() took {elapsed:.3f}s, expected well under the 10s hang"

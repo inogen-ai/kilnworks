@@ -20,6 +20,7 @@ class FakeConnector:
         self.raises = raises
         self.delay = delay
         self.calls: list[tuple[str, int]] = []
+        self.status_calls = 0
 
     def search(self, query: str, limit: int) -> list[ConnectorResult]:
         self.calls.append((query, limit))
@@ -30,4 +31,5 @@ class FakeConnector:
         return self.results[:limit]
 
     def status(self) -> str:
+        self.status_calls += 1
         return self._status

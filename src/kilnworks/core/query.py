@@ -6,7 +6,6 @@ from uuid import UUID, uuid4
 
 from kilnworks.core.errors import ProviderError
 from kilnworks.core.models import (
-    CONNECTOR_STATUS_READY,
     Answer,
     Citation,
     Completion,
@@ -74,12 +73,14 @@ class QueryService:
         principals: Sequence[str],
         connectors: Sequence[str],
     ) -> list[RetrievedChunk]:
+        # Select purely by "selected name is allowed for these principals" -- no
+        # status() pre-check here. A status() probe would spawn each connector's
+        # server a second time (once to check status, once to search) and, being
+        # sequential, isn't bounded by the parallel as_completed deadline below. A
+        # down/stalled connector's search() now raises or times out and is caught
+        # by the graceful-degradation handling further down instead.
         allowed = {c.name: c for c in self._connector_registry.allowed_for(principals)}
-        chosen = [
-            allowed[name]
-            for name in connectors
-            if name in allowed and allowed[name].status() == CONNECTOR_STATUS_READY
-        ]
+        chosen = [allowed[name] for name in connectors if name in allowed]
         if not chosen:
             return []
 

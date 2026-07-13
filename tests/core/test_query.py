@@ -7,7 +7,7 @@ from kilnworks.adapters.connectors.fake import FakeConnector
 from kilnworks.adapters.embedders.fake import FakeEmbedder
 from kilnworks.adapters.llm.fake import FakeLLM
 from kilnworks.core.errors import ProviderError
-from kilnworks.core.models import ConnectorResult, RetrievedChunk
+from kilnworks.core.models import CONNECTOR_STATUS_DOWN, ConnectorResult, RetrievedChunk
 from kilnworks.core.query import NO_ANSWER_TEXT, QueryService
 
 
@@ -224,6 +224,9 @@ def test_connector_results_merged_as_citable_chunks():
     assert results[1].source_uri == "https://s/1"
     assert results[1].text == "slack text 1"
     assert results[2].source_uri == "slack"  # no link -> falls back to connector name
+    # Connector selection is by allow-list membership alone; the query path never
+    # spawns a second connector process just to probe status().
+    assert connector.status_calls == 0
 
     answer = service.ask("q", connectors=["slack"])
     assert [c.index for c in answer.citations] == [1, 2, 3]
@@ -318,6 +321,26 @@ def test_connectors_not_selected_is_pure_local():
     service2 = QueryService(FakeEmbedder(), index, FakeLLM(), connector_registry=registry2)
     service2.retrieve("q", connectors=["slack"])
     assert other.calls == []
+
+
+def test_down_connector_excluded_via_failing_search_not_status_precheck():
+    """A connector self-reporting DOWN status is no longer pre-filtered by a
+    status() gate; it is only excluded when its search() actually fails, via the
+    existing graceful-degradation handling. status() must not be called at all on
+    the query path (that gate spawned every connector's server twice per query).
+    """
+    index = StubIndex([_hit("local passage")])
+    down = FakeConnector(
+        name="down", status=CONNECTOR_STATUS_DOWN, raises=RuntimeError("connector is down")
+    )
+    registry = FakeRegistry([down])
+    service = QueryService(FakeEmbedder(), index, FakeLLM(reply="ok"), connector_registry=registry)
+
+    results = service.retrieve("q", connectors=["down"])
+
+    assert [r.title for r in results] == ["doc"]
+    assert down.calls  # search() was attempted...
+    assert down.status_calls == 0  # ...but status() never was
 
 
 def test_unallowed_connector_name_ignored():
