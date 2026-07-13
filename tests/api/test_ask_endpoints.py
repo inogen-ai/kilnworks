@@ -95,13 +95,18 @@ def test_ask_attributes_cost_to_user(client, api_settings):
 
 
 def test_ask_forwards_source_ids(client, api_settings):
+    # Without scoping, "tell me about beta" ranks doc B's chunk first (closer
+    # embedding match), so the FakeLLM's "[1]" citation would resolve to B.
+    # Passing source_ids=[doc_a] must exclude B from retrieval entirely, so
+    # the citation resolves to A instead -- proving source_ids narrows the
+    # candidate set rather than just being ignored.
     _register(api_settings)
     doc_a = _seed_doc(api_settings, "alpha document text", ["public"])
     _seed_doc(api_settings, "beta document text", ["public"])
     headers = {"Authorization": f"Bearer {_token(client)}"}
     response = client.post(
         "/ask",
-        json={"question": "tell me about alpha", "source_ids": [str(doc_a)]},
+        json={"question": "tell me about beta", "source_ids": [str(doc_a)]},
         headers=headers,
     )
     assert response.status_code == 200
