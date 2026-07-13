@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { ApiError, askStream, type Answer, type Citation } from "./api";
+import type { Selection } from "./Sources";
 
 type Message = {
   role: "user" | "assistant";
@@ -12,9 +13,11 @@ type Message = {
 export default function Chat({
   token,
   onAuthError,
+  selection,
 }: {
   token: string;
   onAuthError: () => void;
+  selection: Selection;
 }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [question, setQuestion] = useState("");
@@ -55,7 +58,15 @@ export default function Chat({
     const controller = new AbortController();
     abortRef.current = controller;
     try {
-      for await (const sse of askStream(token, asked, controller.signal)) {
+      const sourceIds = [...selection.documentIds];
+      const connectors = [...selection.connectorNames];
+      for await (const sse of askStream(
+        token,
+        asked,
+        controller.signal,
+        sourceIds,
+        connectors,
+      )) {
         if (sse.event === "delta") {
           const delta = (sse.data as { text: string }).text;
           patchLast((last) => ({ ...last, text: last.text + delta }));

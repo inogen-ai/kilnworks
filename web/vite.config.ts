@@ -10,6 +10,7 @@ export default defineConfig({
       "/auth": api,
       "/ask": api,
       "/documents": api,
+      "/connectors": api,
       "/jobs": api,
       "/health": api,
     },

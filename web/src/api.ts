@@ -34,6 +34,12 @@ export type JobInfo = {
   error: string | null;
 };
 
+export type ConnectorInfo = {
+  name: string;
+  status: string;
+  needs_login: boolean;
+};
+
 function authHeaders(token: string): Record<string, string> {
   return { authorization: `Bearer ${token}` };
 }
@@ -110,16 +116,34 @@ export async function getJob(token: string, jobId: number): Promise<JobInfo> {
   return response.json();
 }
 
+export async function deleteDocument(token: string, id: string): Promise<void> {
+  await checked(
+    await fetch(`/documents/${id}`, { method: "DELETE", headers: authHeaders(token) }),
+  );
+}
+
+export async function listConnectors(token: string): Promise<ConnectorInfo[]> {
+  const response = await checked(
+    await fetch("/connectors", { headers: authHeaders(token) }),
+  );
+  return response.json();
+}
+
 export async function* askStream(
   token: string,
   question: string,
   signal?: AbortSignal,
+  sourceIds?: string[],
+  connectors?: string[],
 ): AsyncGenerator<SseEvent> {
+  const body: Record<string, unknown> = { question };
+  if (sourceIds !== undefined) body.source_ids = sourceIds;
+  if (connectors !== undefined) body.connectors = connectors;
   const response = await checked(
     await fetch("/ask/stream", {
       method: "POST",
       headers: { ...authHeaders(token), "content-type": "application/json" },
-      body: JSON.stringify({ question }),
+      body: JSON.stringify(body),
       signal,
     }),
   );

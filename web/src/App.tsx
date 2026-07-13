@@ -2,8 +2,8 @@ import { useState } from "react";
 
 import { parseAuthFragment } from "./api";
 import Chat from "./Chat";
-import Documents from "./Documents";
 import Login from "./Login";
+import Sources, { emptySelection, type Selection } from "./Sources";
 
 // Parsed and scrubbed exactly once at module load: as a useState lazy initializer,
 // StrictMode's dev double-invoke would re-parse the already-scrubbed (empty) hash on
@@ -25,6 +25,7 @@ export default function App() {
     return sessionStorage.getItem("kilnworks-token");
   });
   const [ssoError] = useState<string | null>(fragmentAuth.error);
+  const [selection, setSelection] = useState<Selection>(emptySelection);
 
   function handleLogin(newToken: string) {
     sessionStorage.setItem("kilnworks-token", newToken);
@@ -47,8 +48,13 @@ export default function App() {
         </button>
       </header>
       <div className="body">
-        <Documents token={token} onAuthError={handleLogout} />
-        <Chat token={token} onAuthError={handleLogout} />
+        <Sources
+          token={token}
+          onAuthError={handleLogout}
+          selection={selection}
+          setSelection={setSelection}
+        />
+        <Chat token={token} onAuthError={handleLogout} selection={selection} />
       </div>
       <footer className="footer">
         built by{" "}
