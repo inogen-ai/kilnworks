@@ -353,32 +353,50 @@ def test_build_services_prepared_wires_media_extractor(pg_url):
     conn.close()
 
 
-def test_no_connectors_config_yields_empty_registry_and_no_mcp_import(pg_url, monkeypatch):
+def test_no_connectors_config_yields_empty_registry_and_no_mcp_import(pg_url):
+    # This has to run in a *fresh* interpreter, not in-process: `tests/test_wiring.py`
+    # (this very module) imports `kilnworks.wiring` at collection time, so by the time
+    # any test body runs, whatever `wiring` imports at module scope has already
+    # happened. An in-process check that first scrubs `mcp` out of `sys.modules` and
+    # then asserts it's absent only proves the scrub worked — it can't detect a
+    # top-level `import mcp` in `wiring.py` because that import already fired before
+    # the scrub, and nothing in this test's build path re-imports `wiring`. Subprocess
+    # isolation is the only way to faithfully test "does loading/using this path import
+    # mcp" for the sacred base/offline install path.
+    import subprocess
     import sys
 
-    # Other test modules (tests/adapters/test_mcp_stdio.py) legitimately import `mcp`
-    # directly to exercise the real MCPStdioConnector, which leaves it cached in
-    # sys.modules for the rest of the pytest session regardless of run order. Scrub any
-    # already-cached mcp modules first (monkeypatch restores them after the test) so this
-    # assertion faithfully checks "did *this* build import mcp", not "has anything, ever,
-    # in this session imported mcp".
-    for mod_name in list(sys.modules):
-        if mod_name == "mcp" or mod_name.startswith("mcp."):
-            monkeypatch.delitem(sys.modules, mod_name, raising=False)
+    script = f"""
+import sys
 
-    conn = connect(pg_url)
-    init_db(conn)
-    from kilnworks.wiring import build_services_prepared
+from kilnworks.db.connection import connect, init_db
+from kilnworks.settings import Settings
+from kilnworks.wiring import build_services_prepared
 
-    services = build_services_prepared(
-        Settings(
-            database_url=pg_url, fake_providers=True, openai_api_key="", connectors_config=""
-        ),
-        conn,
+conn = connect({pg_url!r})
+init_db(conn)
+services = build_services_prepared(
+    Settings(
+        database_url={pg_url!r}, fake_providers=True, openai_api_key="", connectors_config=""
+    ),
+    conn,
+)
+conn.close()
+assert services.connectors.allowed_for(["public"]) == []
+print("MCP_IMPORTED" if "mcp" in sys.modules else "MCP_CLEAN")
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script], capture_output=True, text=True, timeout=60
     )
-    conn.close()
-    assert services.connectors.allowed_for(["public"]) == []
-    assert "mcp" not in sys.modules  # sacred constraint: base path never loads mcp
+    assert result.returncode == 0, (
+        f"subprocess build failed (exit {result.returncode})\n"
+        f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+    )
+    assert "MCP_CLEAN" in result.stdout, (
+        "sacred constraint violated: building services with no connectors config "
+        f"imported `mcp` in a fresh interpreter\n"
+        f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+    )
 
 
 def test_malformed_connectors_config_does_not_crash(tmp_path, monkeypatch, caplog):
