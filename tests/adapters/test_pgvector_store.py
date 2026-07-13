@@ -93,6 +93,34 @@ def test_search_result_carries_document_metadata(conn):
     assert hit.title == "doc"
 
 
+def test_delete_document_removes_row_and_returns_true(conn):
+    store = PgVectorStore(conn)
+    doc_id = store.upsert_document(
+        Document(source_uri="file:///delete-me.md", title="d", text="t", acl_tags=["public"])
+    )
+    assert store.delete_document(doc_id, ["public"]) is True
+    row = conn.execute("SELECT id FROM documents WHERE id = %s", (doc_id,)).fetchone()
+    assert row is None
+
+
+def test_delete_document_returns_false_when_principals_dont_match(conn):
+    store = PgVectorStore(conn)
+    doc_id = store.upsert_document(
+        Document(source_uri="file:///keep-me.md", title="d", text="t", acl_tags=["sales"])
+    )
+    assert store.delete_document(doc_id, ["public"]) is False
+    row = conn.execute("SELECT id FROM documents WHERE id = %s", (doc_id,)).fetchone()
+    assert row is not None
+
+
+def test_delete_document_chunks_removes_vectors(conn):
+    store, embedder = PgVectorStore(conn), FakeEmbedder()
+    doc_id = _seed(store, embedder, "chunks to be deleted", ["public"])
+    store.delete_document_chunks(doc_id)
+    hits = store.search(embedder.embed(["chunks to be deleted"]).vectors[0], ["public"])
+    assert all(hit.document_id != doc_id for hit in hits)
+
+
 def test_record_ingest_failure_covers_all_three_status_branches(conn):
     store = PgVectorStore(conn)
 

@@ -34,6 +34,8 @@ class DocumentStore(Protocol):
 
     def record_ingest_failure(self, source_uri: str, error: str) -> None: ...
 
+    def delete_document(self, document_id: UUID, principals: Sequence[str]) -> bool: ...
+
 
 class VectorIndex(Protocol):
     def upsert_chunks(
@@ -43,6 +45,8 @@ class VectorIndex(Protocol):
     def search(
         self, embedding: Sequence[float], principals: Sequence[str], limit: int = 8
     ) -> list[RetrievedChunk]: ...
+
+    def delete_document_chunks(self, document_id: UUID) -> None: ...
 
 
 class LLMProvider(Protocol):

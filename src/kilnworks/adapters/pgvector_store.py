@@ -67,6 +67,17 @@ class PgVectorStore:
             {"id": uuid4(), "uri": source_uri, "title": title, "error": error},
         )
 
+    def delete_document(self, document_id: UUID, principals: Sequence[str]) -> bool:
+        with self._conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM documents WHERE id = %s AND acl_tags && %s::text[]",
+                (document_id, list(principals)),
+            )
+            return cur.rowcount > 0
+
+    def delete_document_chunks(self, document_id: UUID) -> None:
+        self._conn.execute("DELETE FROM chunks WHERE document_id = %s", (document_id,))
+
     def upsert_chunks(
         self, chunks: Sequence[Chunk], embeddings: Sequence[Sequence[float]]
     ) -> None:
