@@ -1,3 +1,5 @@
+from uuid import uuid4
+
 from kilnworks.adapters.embedders.fake import FakeEmbedder
 from kilnworks.adapters.pgvector_store import PgVectorStore
 from kilnworks.core.models import Chunk, Document
@@ -22,6 +24,7 @@ def _seed_doc(api_settings, text, acl_tags):
     store.upsert_chunks([chunk], embedder.embed([text]).vectors)
     store.mark_document(doc_id, "ready")
     conn.close()
+    return doc_id
 
 
 def test_endpoints_require_auth(client):
@@ -89,3 +92,61 @@ def test_ask_attributes_cost_to_user(client, api_settings):
     ).fetchall()
     conn.close()
     assert rows == [(str(user.id),)]
+
+
+def test_ask_forwards_source_ids(client, api_settings):
+    _register(api_settings)
+    doc_a = _seed_doc(api_settings, "alpha document text", ["public"])
+    _seed_doc(api_settings, "beta document text", ["public"])
+    headers = {"Authorization": f"Bearer {_token(client)}"}
+    response = client.post(
+        "/ask",
+        json={"question": "tell me about alpha", "source_ids": [str(doc_a)]},
+        headers=headers,
+    )
+    assert response.status_code == 200
+    answer = response.json()
+    assert len(answer["citations"]) == 1
+    assert answer["citations"][0]["title"] == "alpha do"
+    assert answer["citations"][0]["source_uri"] == "file:///alpha do.md"
+
+
+def test_ask_without_source_ids_is_unchanged(client, api_settings):
+    _register(api_settings)
+    _seed_doc(api_settings, "public knowledge", ["public"])
+    headers = {"Authorization": f"Bearer {_token(client)}"}
+    response = client.post(
+        "/ask", json={"question": "public knowledge"}, headers=headers
+    )
+    assert response.status_code == 200
+    assert len(response.json()["citations"]) == 1
+
+
+def test_ask_unknown_source_id_yields_no_local_hit(client, api_settings):
+    _register(api_settings)
+    _seed_doc(api_settings, "public knowledge", ["public"])
+    headers = {"Authorization": f"Bearer {_token(client)}"}
+    response = client.post(
+        "/ask",
+        json={"question": "public knowledge", "source_ids": [str(uuid4())]},
+        headers=headers,
+    )
+    assert response.status_code == 200
+    answer = response.json()
+    assert answer["citations"] == []
+    assert "couldn't find" in answer["text"]
+
+
+def test_ask_empty_source_ids_returns_no_answer(client, api_settings):
+    _register(api_settings)
+    _seed_doc(api_settings, "public knowledge", ["public"])
+    headers = {"Authorization": f"Bearer {_token(client)}"}
+    response = client.post(
+        "/ask",
+        json={"question": "public knowledge", "source_ids": []},
+        headers=headers,
+    )
+    assert response.status_code == 200
+    answer = response.json()
+    assert answer["citations"] == []
+    assert "couldn't find" in answer["text"]

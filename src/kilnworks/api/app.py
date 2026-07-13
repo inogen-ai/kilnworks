@@ -43,9 +43,16 @@ def _ask_stream_events(
     principals: Sequence[str],
     limit: int,
     user_id: str,
+    source_ids: Sequence[UUID] | None = None,
+    connectors: Sequence[str] | None = None,
 ) -> Iterator[str]:
     events = query_service.ask_stream(
-        question, principals=principals, limit=limit, user_id=user_id
+        question,
+        principals=principals,
+        limit=limit,
+        user_id=user_id,
+        source_ids=source_ids,
+        connectors=connectors,
     )
     try:
         for event in events:
@@ -301,6 +308,8 @@ def create_app(settings: Settings) -> FastAPI:
                 principals=claims.principals,
                 limit=body.limit,
                 user_id=str(claims.user_id),
+                source_ids=body.source_ids,
+                connectors=body.connectors,
             )
         except ProviderError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -312,7 +321,13 @@ def create_app(settings: Settings) -> FastAPI:
         services=Depends(get_services),
     ) -> StreamingResponse:
         generator = _ask_stream_events(
-            services.query, body.question, claims.principals, body.limit, str(claims.user_id)
+            services.query,
+            body.question,
+            claims.principals,
+            body.limit,
+            str(claims.user_id),
+            body.source_ids,
+            body.connectors,
         )
         return StreamingResponse(generator, media_type="text/event-stream")
 

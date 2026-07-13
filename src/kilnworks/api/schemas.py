@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from pydantic import BaseModel, Field
 
 
@@ -14,6 +16,8 @@ class TokenResponse(BaseModel):
 class AskRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=4000)
     limit: int = Field(8, ge=1, le=50)
+    source_ids: list[UUID] | None = None
+    connectors: list[str] | None = None
 
 
 class DocumentInfo(BaseModel):
