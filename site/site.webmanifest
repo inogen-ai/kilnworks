@@ -1,0 +1,15 @@
+{
+  "name": "Kilnworks",
+  "short_name": "Kilnworks",
+  "icons": [
+    {
+      "src": "assets/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "theme_color": "#1b1814",
+  "background_color": "#1b1814",
+  "display": "standalone"
+}
