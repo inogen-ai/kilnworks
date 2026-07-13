@@ -1,5 +1,6 @@
 import re
 from collections.abc import Iterator, Sequence
+from uuid import UUID
 
 from kilnworks.core.errors import ProviderError
 from kilnworks.core.models import Answer, Citation, Completion, RetrievedChunk
@@ -57,14 +58,17 @@ class QueryService:
         principals: Sequence[str] = ("public",),
         limit: int = 8,
         user_id: str | None = None,
+        source_ids: Sequence[UUID] | None = None,
+        connectors: Sequence[str] | None = None,
     ) -> list[RetrievedChunk]:
+        # `connectors` is reserved for federated retrieval (task C2) and is not yet used.
         batch = self._embedder.embed([question])
         if self._cost:
             self._cost.record_cost(
                 "embedding", self._embedder.model_name, batch.total_tokens, 0,
                 "query", user_id=user_id,
             )
-        results = self._index.search(batch.vectors[0], principals, limit)
+        results = self._index.search(batch.vectors[0], principals, limit, source_ids=source_ids)
         return results
 
     def ask(
@@ -73,8 +77,10 @@ class QueryService:
         principals: Sequence[str] = ("public",),
         limit: int = 8,
         user_id: str | None = None,
+        source_ids: Sequence[UUID] | None = None,
+        connectors: Sequence[str] | None = None,
     ) -> Answer:
-        results = self.retrieve(question, principals, limit, user_id)
+        results = self.retrieve(question, principals, limit, user_id, source_ids, connectors)
         if not results:
             return Answer(text=NO_ANSWER_TEXT, citations=[])
         completion = self._llm.complete(SYSTEM_PROMPT, build_user_prompt(question, results))
@@ -95,8 +101,10 @@ class QueryService:
         principals: Sequence[str] = ("public",),
         limit: int = 8,
         user_id: str | None = None,
+        source_ids: Sequence[UUID] | None = None,
+        connectors: Sequence[str] | None = None,
     ) -> Iterator[str | Answer]:
-        results = self.retrieve(question, principals, limit, user_id)
+        results = self.retrieve(question, principals, limit, user_id, source_ids, connectors)
         if not results:
             yield Answer(text=NO_ANSWER_TEXT, citations=[])
             return

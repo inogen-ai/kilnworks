@@ -77,7 +77,7 @@ def test_runner_passes_principals_and_limit_through():
 
     EvalRunner(service, judge).run([case], principals=("hr", "public"), limit=3)
 
-    assert service._index.searches[0] == (("hr", "public"), 3)
+    assert service._index.searches[0] == (("hr", "public"), 3, None)
 
 
 def test_summary_rates_computed_over_mixed_results():

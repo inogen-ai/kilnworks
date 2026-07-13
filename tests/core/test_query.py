@@ -17,8 +17,8 @@ class StubIndex:
     def upsert_chunks(self, chunks, embeddings):
         raise NotImplementedError
 
-    def search(self, embedding, principals, limit=8):
-        self.searches.append((principals, limit))
+    def search(self, embedding, principals, limit=8, source_ids=None):
+        self.searches.append((principals, limit, source_ids))
         return self._results
 
 
@@ -64,7 +64,7 @@ def test_empty_retrieval_short_circuits_without_llm_call():
 def test_principals_are_passed_to_search():
     index = StubIndex([_hit("a")])
     QueryService(FakeEmbedder(), index, FakeLLM()).ask("q", principals=("hr", "public"), limit=3)
-    assert index.searches == [(("hr", "public"), 3)]
+    assert index.searches == [(("hr", "public"), 3, None)]
 
 
 def test_context_blocks_are_numbered_in_prompt():
@@ -163,5 +163,29 @@ def test_retrieve_returns_hits_and_records_embedding_cost():
     service = QueryService(FakeEmbedder(), index, FakeLLM(), cost=cost)
     results = service.retrieve("how hot?", principals=("hr",), limit=3, user_id="u-1")
     assert [r.text for r in results] == ["kilns are hot"]
-    assert index.searches == [(("hr",), 3)]
+    assert index.searches == [(("hr",), 3, None)]
     assert cost.events == [("embedding", "fake-embedder", 2, 0, "query", "u-1")]
+
+
+def test_retrieve_passes_source_ids_to_index():
+    source_a, source_b = uuid4(), uuid4()
+    index = StubIndex([_hit("a")])
+    service = QueryService(FakeEmbedder(), index, FakeLLM())
+    service.retrieve("q", source_ids=[source_a, source_b])
+    assert index.searches == [(("public",), 8, [source_a, source_b])]
+
+
+def test_ask_forwards_source_ids_and_connectors_to_retrieve():
+    source_a = uuid4()
+    index = StubIndex([_hit("a")])
+    service = QueryService(FakeEmbedder(), index, FakeLLM())
+    service.ask("q", source_ids=[source_a], connectors=["slack"])
+    assert index.searches == [(("public",), 8, [source_a])]
+
+
+def test_ask_stream_forwards_source_ids_and_connectors_to_retrieve():
+    source_a = uuid4()
+    index = StubIndex([_hit("a")])
+    service = QueryService(FakeEmbedder(), index, FakeLLM())
+    list(service.ask_stream("q", source_ids=[source_a], connectors=["slack"]))
+    assert index.searches == [(("public",), 8, [source_a])]
