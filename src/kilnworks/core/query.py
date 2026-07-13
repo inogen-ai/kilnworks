@@ -85,37 +85,50 @@ class QueryService:
 
         federated: list[RetrievedChunk] = []
         skipped: list[str] = []
-        with concurrent.futures.ThreadPoolExecutor(max_workers=len(chosen)) as executor:
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=max(1, len(chosen)))
+        try:
             futures = {
                 executor.submit(c.search, question, self._connector_result_limit): c
                 for c in chosen
             }
-            for future in futures:
-                connector = futures[future]
-                try:
-                    connector_results = future.result(timeout=self._connector_timeout)
-                except concurrent.futures.TimeoutError:
-                    skipped.append(connector.name)
-                    logger.warning("connector %r timed out; skipping", connector.name)
-                    continue
-                except Exception:
-                    skipped.append(connector.name)
-                    logger.warning("connector %r failed; skipping", connector.name, exc_info=True)
-                    continue
-                for r in connector_results:
-                    federated.append(
-                        RetrievedChunk(
-                            id=uuid4(),
-                            document_id=uuid4(),
-                            ordinal=0,
-                            text=r.text,
-                            heading_path=[],
-                            acl_tags=[],
-                            source_uri=(r.link or r.connector),
-                            title=f"{r.connector}: {r.title}",
-                            score=0.0,
+            try:
+                deadline = self._connector_timeout
+                for future in concurrent.futures.as_completed(futures, timeout=deadline):
+                    connector = futures[future]
+                    try:
+                        connector_results = future.result()
+                    except Exception:
+                        skipped.append(connector.name)
+                        logger.warning(
+                            "connector %r failed; skipping", connector.name, exc_info=True
                         )
-                    )
+                        continue
+                    for r in connector_results:
+                        federated.append(
+                            RetrievedChunk(
+                                id=uuid4(),
+                                document_id=uuid4(),
+                                ordinal=0,
+                                text=r.text,
+                                heading_path=[],
+                                acl_tags=[],
+                                source_uri=(r.link or r.connector),
+                                title=f"{r.connector}: {r.title}",
+                                score=0.0,
+                            )
+                        )
+            except concurrent.futures.TimeoutError:
+                # Any futures not yet done have blown the shared deadline; skip them
+                # without waiting for their threads to finish.
+                for future, connector in futures.items():
+                    if not future.done():
+                        skipped.append(connector.name)
+                        logger.warning("connector %r timed out; skipping", connector.name)
+        finally:
+            # Don't block retrieve() on connector threads that are still running past
+            # the shared deadline (or forever, for a hung connector); let them run to
+            # completion in the background and get reaped/GC'd once they finish.
+            executor.shutdown(wait=False, cancel_futures=True)
         return federated
 
     def retrieve(

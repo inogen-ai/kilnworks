@@ -1,3 +1,4 @@
+import time
 from uuid import uuid4
 
 import pytest
@@ -246,6 +247,31 @@ def test_slow_connector_is_skipped_not_fatal():
     assert [r.title for r in results] == ["doc"]
     answer = service.ask("q", connectors=["slow"])
     assert answer.text == "Local [1]."
+
+
+def test_slow_connector_does_not_block_retrieve_wall_clock():
+    """A connector far slower than connector_timeout must not stretch retrieve()'s
+    wall-clock time out to the connector's delay. Bounded by a shared deadline of
+    ~connector_timeout, not by ThreadPoolExecutor's default wait-for-all-threads
+    shutdown behavior.
+    """
+    index = StubIndex([_hit("local passage")])
+    slow = FakeConnector(name="slow", delay=1.0, results=[
+        ConnectorResult(title="never", text="never", connector="slow"),
+    ])
+    registry = FakeRegistry([slow])
+    service = QueryService(
+        FakeEmbedder(), index, FakeLLM(reply="Local [1]."), connector_registry=registry,
+        connector_timeout=0.1,
+    )
+
+    start = time.monotonic()
+    results = service.retrieve("q", connectors=["slow"])
+    elapsed = time.monotonic() - start
+
+    assert [r.title for r in results] == ["doc"]
+    msg = f"retrieve() took {elapsed:.3f}s, expected well under the 1.0s connector delay"
+    assert elapsed < 0.5, msg
 
 
 def test_raising_connector_is_skipped():
