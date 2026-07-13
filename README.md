@@ -184,6 +184,73 @@ principal and upload rights) — point Kilnworks at a tenant-scoped IdP or an
 IdP-side-restricted client, never at a public identity service with an unrestricted
 user base.
 
+## Connectors (beta)
+
+Kilnworks can query read-only MCP connector servers **live, at question time**, and blend
+their results into an answer alongside your ingested documents — cited like any other
+source. This is federated search, not ingestion: connector data is never copied into
+Kilnworks' database, and every question re-queries the connector fresh.
+
+Connectors are opt-in and "bring your own server" in v1 — the connector server packages
+themselves (Salesforce, Microsoft 365, ServiceNow, HubSpot) are separate sibling projects,
+not bundled with Kilnworks or published to PyPI yet.
+
+1. `pip install kilnworks[connectors]` (or `uv sync --extra connectors`) — installs the MCP
+   client library.
+2. Install the connector server(s) you want to use and make their command available on
+   `PATH`. InoGen publishes read-only MCP servers for
+   [m365](https://github.com/inogen-ai/m365-mcp-server),
+   [ServiceNow](https://github.com/inogen-ai/snow-mcp-server),
+   [Salesforce](https://github.com/inogen-ai/sfdc-mcp-server), and
+   [HubSpot](https://github.com/inogen-ai/hubspot-mcp-server) — see each repo for its own
+   setup.
+3. Write a connectors config JSON and point `KILNWORKS_CONNECTORS_CONFIG` at its path:
+
+       {
+         "connectors": [
+           {
+             "name": "salesforce",
+             "command": ["sfdc-mcp-server"],
+             "env": {"SFDC_INSTANCE_URL": "https://your-org.my.salesforce.com"},
+             "allowed_groups": ["sales"],
+             "search_limit": 5,
+             "search_tool": "search",
+             "query_arg": "term",
+             "extra_args": {}
+           }
+         ]
+       }
+
+   `command` is the argv Kilnworks spawns the server's stdio process with — fresh for
+   every query, not once at startup. `env` is merged into the spawned process's
+   environment (values pass through shell-style `$VAR` expansion, so you can reference
+   Kilnworks' own environment for secrets). `allowed_groups` is which Kilnworks ACL groups
+   may use this connector (see governance note below). `search_tool`, `query_arg`, and
+   `extra_args` map the question onto whatever the connector server's own search tool
+   expects — they vary per server: Salesforce's tool takes the query under `query_arg:
+   "term"` instead of the default `"query"`; HubSpot's requires `extra_args:
+   {"object_type": "contacts"}` to say which object type to search.
+4. Device-code connectors (m365, Salesforce) need a one-time interactive login:
+   **pre-authenticate once from a terminal** by running the server's command directly and
+   completing the device-code flow — the resulting token caches to disk, so the per-query
+   spawns Kilnworks does afterward reuse it without re-prompting. Static-credential
+   connectors (ServiceNow, HubSpot) just need their env vars set; no interactive step.
+
+Once configured, `GET /connectors` lists the connectors visible to the caller (name,
+status, whether it still needs the device-code login above), and `POST /ask` accepts an
+optional `"connectors": ["salesforce", ...]` list naming which of those to query for that
+question.
+
+**Governance:** each connector authenticates as a single service identity (its own
+credentials/token cache), not per Kilnworks user — so its results are gated at the
+Kilnworks level by `allowed_groups` matched against the caller's ACL principals, not by
+what that individual user could see in the source system. `KILNWORKS_CONNECTOR_TIMEOUT`
+(default 8s) bounds each connector call, and a slow, timed-out, or failing connector is
+skipped rather than failing the whole `/ask`.
+
+Connectors are entirely opt-in: leave `KILNWORKS_CONNECTORS_CONFIG` unset and Kilnworks
+behaves exactly as the base/offline quickstart above describes.
+
 ## Evals
 
 Kilnworks includes a built-in evaluation framework for assessing RAG pipeline quality. Evals measure:

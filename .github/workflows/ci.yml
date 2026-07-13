@@ -12,6 +12,15 @@ jobs:
       - run: uv sync
       - run: uv run ruff check .
       - run: uv run pytest -v
+  connectors:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --extra connectors
+      - run: >
+          uv run pytest tests/adapters/test_mcp_stdio.py tests/adapters/test_connectors.py
+          tests/core/test_connector_registry.py -q
   web:
     runs-on: ubuntu-latest
     steps:

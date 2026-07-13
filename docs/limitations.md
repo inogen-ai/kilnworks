@@ -95,3 +95,19 @@
 - **Re-ingesting media re-runs the extraction:** there's no content-hash dedupe (see
   above), so re-uploading the same image or audio/video file re-runs — and re-bills —
   the vision/transcription call, not just the (free) embedding step.
+- **Connectors authenticate as a single service identity, not per user:** a configured
+  connector's federated results reflect whatever that one service account can see in
+  the source system, not the individual caller's access there. `allowed_groups` (mapped
+  against the caller's Kilnworks ACL principals) is the only access control — there is
+  no per-user auth against the connector's source system in v1.
+- **No in-app device-code login:** m365/Salesforce-style connectors require
+  pre-authenticating once from a terminal (running the server's command directly and
+  completing the device-code flow); there is no in-app/browser login flow yet, so this
+  step falls to whoever operates the deployment.
+- **Connector results are federated, not ingested:** each query spawns the connector's
+  server fresh and returns live results — there is no local caching or indexing of
+  connector data, so repeated identical questions re-query the source system every time,
+  and results reflect only that moment. There is also no LLM-based query
+  routing/rewriting or cross-source re-ranking: the raw question is sent to every
+  selected connector as-is and its results are appended to the document-retrieval
+  results as-is.
