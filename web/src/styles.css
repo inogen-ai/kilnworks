@@ -2,6 +2,7 @@
    Light theme is a later enhancement (see docs/superpowers/specs/2026-07-13-brand-identity-design.md);
    the app ships dark-only for now. */
 :root {
+  color-scheme: dark;
   /* warm stoneware / clay grounds */
   --ground: #1b1814;
   --ground-2: #221d17;
@@ -10,7 +11,7 @@
   --line-soft: #2e2721;
   --ink: #f0e7d7;
   --ink-dim: #b8a892;
-  --ink-faint: #857866;
+  --ink-faint: #93866f;
   /* glaze palette */
   --ember: #d2703f; /* iron glaze — heat, actions/CTAs */
   --ember-bright: #e88a4f;

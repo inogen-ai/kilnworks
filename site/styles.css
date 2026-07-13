@@ -1,5 +1,6 @@
 /* ===================== TOKENS — direction 02 "Glaze" ===================== */
 :root {
+  color-scheme: light dark;
   /* warm stoneware / clay grounds */
   --ground: #1b1814;
   --ground-2: #221d17;
@@ -8,7 +9,7 @@
   --line-soft: #2e2721;
   --ink: #f0e7d7;
   --ink-dim: #b8a892;
-  --ink-faint: #857866;
+  --ink-faint: #93866f;
   /* glaze palette */
   --ember: #d2703f;        /* iron glaze — heat, CTAs */
   --ember-bright: #e88a4f;
@@ -25,21 +26,23 @@
 @media (prefers-color-scheme: light) {
   :root {
     --ground: #f0e8d8; --ground-2: #ebe1cf; --panel: #f8f2e7; --line: #ddceb8;
-    --line-soft: #e6dac6; --ink: #2b2419; --ink-dim: #6d6151; --ink-faint: #998b78;
+    --line-soft: #e6dac6; --ink: #2b2419; --ink-dim: #6d6151; --ink-faint: #6f6350;
     --ember: #bd5527; --ember-bright: #cf6a37; --celadon: #4f8a67; --celadon-deep: #3f7355;
     --clay: #8a6144; --glow: rgba(189,85,39,0.12);
   }
+  .btn.primary { color: #fff; }
 }
 :root[data-theme="dark"] {
   --ground: #1b1814; --ground-2: #221d17; --panel: #26201a; --line: #39302a; --line-soft: #2e2721;
-  --ink: #f0e7d7; --ink-dim: #b8a892; --ink-faint: #857866; --ember: #d2703f; --ember-bright: #e88a4f;
+  --ink: #f0e7d7; --ink-dim: #b8a892; --ink-faint: #93866f; --ember: #d2703f; --ember-bright: #e88a4f;
   --celadon: #8fbf9f; --celadon-deep: #6fa982; --clay: #6b4a35; --glow: rgba(210,112,63,0.16);
 }
 :root[data-theme="light"] {
   --ground: #f0e8d8; --ground-2: #ebe1cf; --panel: #f8f2e7; --line: #ddceb8; --line-soft: #e6dac6;
-  --ink: #2b2419; --ink-dim: #6d6151; --ink-faint: #998b78; --ember: #bd5527; --ember-bright: #cf6a37;
+  --ink: #2b2419; --ink-dim: #6d6151; --ink-faint: #6f6350; --ember: #bd5527; --ember-bright: #cf6a37;
   --celadon: #4f8a67; --celadon-deep: #3f7355; --clay: #8a6144; --glow: rgba(189,85,39,0.12);
 }
+:root[data-theme="light"] .btn.primary { color: #fff; }
 
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
@@ -98,8 +101,7 @@ nav .inner { display: flex; align-items: center; justify-content: space-between;
   display: inline-flex; align-items: center; gap: 9px; font-weight: 700; font-size: 15px;
   padding: 13px 22px; border-radius: 10px; border: 1px solid transparent; cursor: pointer;
 }
-.btn.primary { background: var(--ember); color: #fff; }
-:root[data-theme="light"] .btn.primary, @media (prefers-color-scheme: light) { }
+.btn.primary { background: var(--ember); color: #1b1814; }
 .btn.primary:hover { background: var(--ember-bright); }
 .btn.ghost { border-color: var(--line); color: var(--ink); }
 .btn.ghost:hover { border-color: var(--ember); }
@@ -129,9 +131,10 @@ nav .inner { display: flex; align-items: center; justify-content: space-between;
 .flow .step.on { color: var(--ink); }
 .flow .step.on .n { border-color: var(--celadon); color: var(--celadon); }
 .flow .arrow { color: var(--ink-faint); padding-left: 10px; font-size: 12px; }
-.flow .gate { color: var(--celadon); }
+.flow .gate { color: var(--celadon-deep); }
 
 /* ===================== FEATURES ===================== */
+#features, #quickstart { scroll-margin-top: 80px; }
 section.features { padding: 78px 0 40px; }
 .sec-head { max-width: 60ch; margin: 0 0 42px; }
 .sec-head .ey { font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ember); margin: 0 0 12px; }
@@ -146,7 +149,7 @@ section.features { padding: 78px 0 40px; }
 .card.hot .ic { color: var(--celadon); }
 .card h3 { font-size: 17px; margin: 0 0 8px; font-weight: 700; letter-spacing: -0.01em; }
 .card p { font-size: 14.5px; color: var(--ink-dim); margin: 0; line-height: 1.6; }
-.card .badge { display: inline-block; font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--celadon);
+.card .badge { display: inline-block; font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--celadon-deep);
   border: 1px solid color-mix(in srgb, var(--celadon) 40%, transparent); border-radius: 999px; padding: 2px 9px; margin-bottom: 12px; font-weight: 600; }
 
 /* ===================== DEMO ===================== */
@@ -165,7 +168,6 @@ section.quick { padding: 60px 0 78px; }
 .quickgrid h2 { font-family: var(--serif); font-weight: 600; font-size: clamp(26px, 3.4vw, 38px); letter-spacing: -0.015em; margin: 0 0 14px; }
 .quickgrid p { color: var(--ink-dim); margin: 0 0 10px; max-width: 46ch; }
 .code { background: #16130f; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
-:root[data-theme="light"] .code, .code { }
 @media (prefers-color-scheme: light) { .code { background: #2b2419; } }
 :root[data-theme="dark"] .code { background: #16130f; }
 :root[data-theme="light"] .code { background: #2b2419; }
