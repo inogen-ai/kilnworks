@@ -4,8 +4,8 @@ from collections.abc import Iterator, Sequence
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
-from urllib.parse import quote
-from uuid import uuid4
+from urllib.parse import quote, unquote, urlparse
+from uuid import UUID, uuid4
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request, UploadFile
 from fastapi.responses import RedirectResponse, StreamingResponse
@@ -14,6 +14,7 @@ from pgvector.psycopg import register_vector
 from psycopg_pool import ConnectionPool
 
 from kilnworks.adapters.jobqueue import PgJobQueue
+from kilnworks.adapters.pgvector_store import PgVectorStore
 from kilnworks.adapters.sources.parsers import SUPPORTED_SUFFIXES
 from kilnworks.api.deps import current_claims, get_conn, get_services, get_settings
 from kilnworks.api.schemas import (
@@ -238,6 +239,38 @@ def create_app(settings: Settings) -> FastAPI:
             "ingest_upload", payload, created_by=str(claims.user_id)
         )
         return {"job_id": job_id, "status": "queued"}
+
+    @app.delete("/documents/{document_id}", status_code=204)
+    def delete_document(
+        document_id: UUID,
+        claims: TokenClaims = Depends(current_claims),
+        settings: Settings = Depends(get_settings),
+        conn=Depends(get_conn),
+    ) -> None:
+        row = conn.execute(
+            "SELECT source_uri FROM documents WHERE id = %s AND acl_tags && %s::text[]",
+            (document_id, list(claims.principals)),
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="document not found")
+        source_uri = row[0]
+
+        store = PgVectorStore(conn)
+        with store.transaction():
+            store.delete_document_chunks(document_id)
+            store.delete_document(document_id, claims.principals)
+
+        # source_uri for uploads is a file:// URI (Path.as_uri()); resolve it back to a
+        # filesystem path before checking containment, so we never unlink outside uploads/.
+        uploads_dir = Path(settings.data_dir).resolve() / "uploads"
+        parsed = urlparse(source_uri)
+        path_str = unquote(parsed.path) if parsed.scheme == "file" else source_uri
+        try:
+            file_path = Path(path_str).resolve()
+            if file_path.is_relative_to(uploads_dir):
+                file_path.unlink(missing_ok=True)
+        except (OSError, ValueError):
+            pass
 
     @app.get("/jobs/{job_id}", response_model=JobInfo)
     def job_status(
