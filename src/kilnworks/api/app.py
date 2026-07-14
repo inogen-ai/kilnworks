@@ -105,7 +105,7 @@ def create_app(settings: Settings) -> FastAPI:
         finally:
             app.state.pool.close()
 
-    app = FastAPI(title="Kilnworks", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title="Kilnworks", version="0.9.1", lifespan=lifespan)
     app.state.settings = settings
     if settings.oidc_enabled:
         app.state.oidc = OidcClient(

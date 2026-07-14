@@ -1,6 +1,6 @@
 [project]
 name = "kilnworks"
-version = "0.1.0"
+version = "0.9.1"
 description = "Production-grade, self-hostable RAG knowledge assistant"
 readme = "README.md"
 requires-python = ">=3.12"
