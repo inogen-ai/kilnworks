@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ApiError, askStream, type Answer, type Citation } from "./api";
 import { askPayload } from "./selection";
 import type { Catalog, Selection } from "./Sources";
+import { strings } from "./strings";
 
 type Message = {
   role: "user" | "assistant";
@@ -86,7 +87,7 @@ export default function Chat({
       }
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return;
-      const message = err instanceof Error ? err.message : "request failed";
+      const message = err instanceof Error ? err.message : strings.chat.requestFailed;
       if (err instanceof ApiError && err.status === 401) onAuthError();
       patchLast((last) => ({ ...last, text: message, error: true }));
     } finally {
@@ -100,20 +101,18 @@ export default function Chat({
   return (
     <main className="chat">
       <div className="messages" ref={scrollRef}>
-        {messages.length === 0 && (
-          <p className="empty">Upload a document, then ask it a question.</p>
-        )}
+        {messages.length === 0 && <p className="empty">{strings.chat.empty}</p>}
         {messages.map((message, i) => (
           <div key={i} className={`message ${message.role} ${message.error ? "error" : ""}`}>
-            <p>{message.text || "…"}</p>
+            <p>{message.text || strings.chat.busy}</p>
             {message.citations && message.citations.length > 0 && (
               <ul className="citations">
                 {message.citations.map((citation) => (
                   <li key={citation.index}>
                     [{citation.index}] {citation.title}
                     {citation.heading_path.length > 0 &&
-                      ` › ${citation.heading_path.join(" › ")}`}
-                    {citation.locator && ` @ ${citation.locator}`}
+                      strings.chat.citationHeadingPath(citation.heading_path)}
+                    {citation.locator && strings.chat.citationLocator(citation.locator)}
                   </li>
                 ))}
               </ul>
@@ -125,11 +124,11 @@ export default function Chat({
         <input
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
-          placeholder="Ask your documents…"
+          placeholder={strings.chat.placeholder}
           disabled={busy}
         />
         <button type="submit" disabled={busy || !question.trim()}>
-          {busy ? "…" : "Ask"}
+          {busy ? strings.chat.busy : strings.chat.ask}
         </button>
       </form>
     </main>

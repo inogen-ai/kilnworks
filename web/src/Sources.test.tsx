@@ -13,6 +13,7 @@ vi.mock("./api", async (importOriginal) => {
 
 import { listConnectors } from "./api";
 import Sources, { emptySelection } from "./Sources";
+import { strings } from "./strings";
 
 describe("Sources — connectors", () => {
   it("shows a helpful empty state and hides connector bulk actions when there are none", async () => {
@@ -38,8 +39,8 @@ describe("Sources — connectors", () => {
 
     // Documents keeps its own All/None; the Connectors pair must not render
     // for an empty connector list since there's nothing for them to act on.
-    expect(screen.getAllByRole("button", { name: "All" })).toHaveLength(1);
-    expect(screen.getAllByRole("button", { name: "None" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: strings.sources.all })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: strings.sources.none })).toHaveLength(1);
   });
 
   it("renders an enabled connector row and toggles selection on click", async () => {

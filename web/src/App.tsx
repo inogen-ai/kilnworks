@@ -4,6 +4,7 @@ import { parseAuthFragment } from "./api";
 import Chat from "./Chat";
 import Login from "./Login";
 import Sources, { emptyCatalog, emptySelection, type Catalog, type Selection } from "./Sources";
+import { strings } from "./strings";
 import Wordmark from "./Wordmark";
 
 // Parsed and scrubbed exactly once at module load: as a useState lazy initializer,
@@ -51,7 +52,7 @@ export default function App() {
       <header className="topbar">
         <Wordmark />
         <button className="ghost" onClick={handleLogout}>
-          Log out
+          {strings.app.logout}
         </button>
       </header>
       <div className="body">
@@ -70,7 +71,7 @@ export default function App() {
         />
       </div>
       <footer className="footer">
-        built by{" "}
+        {strings.app.builtBy}{" "}
         <a href="https://inogen.ai" target="_blank" rel="noreferrer">
           InoGen
         </a>

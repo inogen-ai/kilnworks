@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 
 import { getAuthConfig, login } from "./api";
+import { strings } from "./strings";
 import Wordmark from "./Wordmark";
 
 export default function Login({
@@ -29,7 +30,7 @@ export default function Login({
     try {
       onLogin(await login(email, password));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "login failed");
+      setError(err instanceof Error ? err.message : strings.login.loginFailed);
     } finally {
       setBusy(false);
     }
@@ -39,11 +40,11 @@ export default function Login({
     <div className="login-wrap">
       <form className="login-card" onSubmit={handleSubmit}>
         <Wordmark as="h1" />
-        <p className="tagline">Ask your documents.</p>
+        <p className="tagline">{strings.login.tagline}</p>
         <input
           type="email"
-          placeholder="email"
-          aria-label="email"
+          placeholder={strings.login.email}
+          aria-label={strings.login.email}
           autoComplete="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -51,8 +52,8 @@ export default function Login({
         />
         <input
           type="password"
-          placeholder="password"
-          aria-label="password"
+          placeholder={strings.login.password}
+          aria-label={strings.login.password}
           autoComplete="current-password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
@@ -61,7 +62,7 @@ export default function Login({
         {error && <p className="error">{error}</p>}
         {ssoError && <p className="error">{ssoError}</p>}
         <button type="submit" disabled={busy}>
-          {busy ? "Signing in…" : "Sign in"}
+          {busy ? strings.login.signingIn : strings.login.signIn}
         </button>
         {ssoEnabled && (
           <button
@@ -71,12 +72,15 @@ export default function Login({
               window.location.href = "/auth/oidc/login";
             }}
           >
-            Sign in with SSO
+            {strings.login.ssoSignIn}
           </button>
         )}
         <p className="hint">
-          No account? Create one: <code>kilnworks create-user you@example.com</code> (or{" "}
-          <code>docker compose exec api kilnworks create-user you@example.com</code>)
+          {strings.login.hintIntro}
+          <code>{strings.login.hintCommand}</code>
+          {strings.login.hintOr}
+          <code>{strings.login.hintDockerCommand}</code>
+          {strings.login.hintClose}
         </p>
       </form>
     </div>

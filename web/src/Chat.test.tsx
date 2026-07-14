@@ -14,6 +14,7 @@ import { askStream } from "./api";
 import Chat from "./Chat";
 import { emptyCatalog, emptySelection } from "./Sources";
 import type { SseEvent } from "./sse";
+import { strings } from "./strings";
 
 // Minimal async-generator helper: yields one "answer" SSE event carrying the
 // given citations, mirroring what askStream (web/src/api.ts) produces once
@@ -32,6 +33,23 @@ async function ask(question: string) {
   await userEvent.type(input, question);
   await userEvent.click(screen.getByRole("button", { name: /ask/i }));
 }
+
+describe("Chat — strings wiring", () => {
+  it("sources its placeholder, empty state, and Ask button text from strings.ts", () => {
+    render(
+      <Chat
+        token="tok"
+        onAuthError={vi.fn()}
+        selection={emptySelection}
+        catalog={emptyCatalog}
+      />,
+    );
+
+    expect(screen.getByPlaceholderText(strings.chat.placeholder)).toBeInTheDocument();
+    expect(screen.getByText(strings.chat.empty)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: strings.chat.ask })).toBeInTheDocument();
+  });
+});
 
 describe("Chat — citation rendering", () => {
   it("renders heading path and media locator alongside the citation", async () => {

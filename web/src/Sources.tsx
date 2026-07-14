@@ -11,6 +11,7 @@ import {
   type DocumentInfo,
   type JobInfo,
 } from "./api";
+import { strings } from "./strings";
 
 export type Selection = {
   documentIds: Set<string>;
@@ -89,7 +90,7 @@ export default function Sources({
       });
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) onAuthError();
-      else setNotice("couldn't load documents");
+      else setNotice(strings.sources.couldntLoadDocuments);
     } finally {
       if (aliveRef.current) setDocumentsLoaded(true);
     }
@@ -115,7 +116,7 @@ export default function Sources({
       });
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) onAuthError();
-      else setNotice("couldn't load connectors");
+      else setNotice(strings.sources.couldntLoadConnectors);
     } finally {
       if (aliveRef.current) setConnectorsLoaded(true);
     }
@@ -139,7 +140,7 @@ export default function Sources({
 
   async function handleUpload(file: File) {
     setUploading(true);
-    setNotice(`uploading ${file.name}…`);
+    setNotice(strings.sources.uploadingFile(file.name));
     try {
       const jobId = await uploadDocument(token, file);
       if (!aliveRef.current) return;
@@ -151,7 +152,7 @@ export default function Sources({
         if (!aliveRef.current) return;
         polls += 1;
         if (polls > MAX_POLLS) {
-          setNotice("still processing — refresh to check status");
+          setNotice(strings.sources.stillProcessing);
           break;
         }
         let job: JobInfo;
@@ -165,7 +166,7 @@ export default function Sources({
           }
           consecutiveErrors += 1;
           if (consecutiveErrors > MAX_CONSECUTIVE_ERRORS) {
-            setNotice(err instanceof Error ? err.message : "upload failed");
+            setNotice(err instanceof Error ? err.message : strings.sources.uploadFailed);
             break;
           }
           continue;
@@ -173,7 +174,7 @@ export default function Sources({
         if (!aliveRef.current) return;
         consecutiveErrors = 0;
         status = job.status;
-        if (status === "failed") setNotice(job.error ?? "ingestion failed");
+        if (status === "failed") setNotice(job.error ?? strings.sources.ingestionFailed);
       }
       if (!aliveRef.current) return;
       if (status === "done") setNotice(null);
@@ -184,7 +185,7 @@ export default function Sources({
         onAuthError();
         return;
       }
-      setNotice(err instanceof Error ? err.message : "upload failed");
+      setNotice(err instanceof Error ? err.message : strings.sources.uploadFailed);
     } finally {
       if (aliveRef.current) {
         setUploading(false);
@@ -194,13 +195,13 @@ export default function Sources({
   }
 
   async function handleDelete(doc: DocumentInfo) {
-    if (!confirm(`Delete "${doc.title}"? This cannot be undone.`)) return;
+    if (!confirm(strings.sources.confirmDelete(doc.title))) return;
     try {
       await deleteDocument(token, doc.id);
       await refreshDocuments();
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) onAuthError();
-      else setNotice(err instanceof Error ? err.message : "delete failed");
+      else setNotice(err instanceof Error ? err.message : strings.sources.deleteFailed);
     }
   }
 
@@ -256,20 +257,20 @@ export default function Sources({
   return (
     <aside className="sources">
       <div className="sources-head">
-        <h2>Documents</h2>
+        <h2>{strings.sources.documents}</h2>
         <div className="sources-actions">
           <button className="ghost small" onClick={selectAllDocuments}>
-            All
+            {strings.sources.all}
           </button>
           <button className="ghost small" onClick={selectNoDocuments}>
-            None
+            {strings.sources.none}
           </button>
           <button
             className="ghost"
             disabled={uploading}
             onClick={() => fileRef.current?.click()}
           >
-            {uploading ? "…" : "+ Upload"}
+            {uploading ? strings.sources.uploading : strings.sources.upload}
           </button>
         </div>
         <input
@@ -296,15 +297,15 @@ export default function Sources({
             <div className="source-row-actions">
               {doc.status === "failed" && doc.error && (
                 <button className="ghost small" onClick={() => toggleDetails(doc.id)}>
-                  Details
+                  {strings.sources.details}
                 </button>
               )}
               <button
                 className="ghost small danger"
-                title="Delete"
+                title={strings.sources.deleteTitle}
                 onClick={() => void handleDelete(doc)}
               >
-                ×
+                {strings.sources.deleteSymbol}
               </button>
             </div>
             {doc.status === "failed" && doc.error && openDetails.has(doc.id) && (
@@ -312,18 +313,18 @@ export default function Sources({
             )}
           </li>
         ))}
-        {documents.length === 0 && <li className="empty">No documents yet.</li>}
+        {documents.length === 0 && <li className="empty">{strings.sources.noDocuments}</li>}
       </ul>
 
       <div className="sources-head">
-        <h2>Connectors</h2>
+        <h2>{strings.sources.connectors}</h2>
         {connectors.length > 0 && (
           <div className="sources-actions">
             <button className="ghost small" onClick={selectAllConnectors}>
-              All
+              {strings.sources.all}
             </button>
             <button className="ghost small" onClick={selectNoConnectors}>
-              None
+              {strings.sources.none}
             </button>
           </div>
         )}
@@ -344,7 +345,7 @@ export default function Sources({
                 <span className="doc-title">{connector.name}</span>
                 {disabled && (
                   <span className="connector-note">
-                    {connector.needs_login ? "needs login" : "down"}
+                    {connector.needs_login ? strings.sources.needsLogin : strings.sources.down}
                   </span>
                 )}
               </label>
@@ -353,16 +354,13 @@ export default function Sources({
         })}
         {connectors.length === 0 && (
           <li className="empty">
-            <p className="notice">
-              Connectors let you federate live queries to systems like Salesforce,
-              Microsoft&nbsp;365, ServiceNow, and HubSpot.
-            </p>
+            <p className="notice">{strings.sources.noConnectors}</p>
             <a
               href="https://github.com/inogen-ai/kilnworks#connectors-beta"
               target="_blank"
               rel="noreferrer"
             >
-              Set up connectors →
+              {strings.sources.setUpConnectors}
             </a>
           </li>
         )}
