@@ -68,6 +68,13 @@ Kilnworks defaults to OpenAI for both chat and embeddings. Two other flavors are
   the schema at the new dimensions) followed by a fresh `docker compose up -d --build`
   and re-ingest.
 
+Multilingual retrieval — asking questions in a language other than your source
+documents, or vice versa — works best with a cloud embedding provider (OpenAI).
+The local Ollama default, `nomic-embed-text`, is English-centric, so cross-lingual
+similarity search is noticeably weaker fully offline. Answers themselves follow the
+question's language by default; set `KILNWORKS_ANSWER_LANGUAGE` to pin every answer
+to a specific language regardless of how the question or sources are written.
+
 ### Local development (CLI)
 
     docker compose up -d db
@@ -350,6 +357,9 @@ Environment variables (all prefixed `KILNWORKS_`):
 | `KILNWORKS_CHAT_MODEL`             | `gpt-4o-mini`                            | OpenAI chat model                        |
 | `KILNWORKS_EMBEDDING_MODEL`        | `text-embedding-3-small`                 | OpenAI embedding model                   |
 | `KILNWORKS_EMBEDDING_DIMENSIONS`   | `1536`                                   | Vector column width; must match the embedding model; capped at `2000` (pgvector HNSW limit) |
+| `KILNWORKS_SYSTEM_PROMPT`          | *(unset, built-in default)*              | Override the RAG system prompt           |
+| `KILNWORKS_NO_ANSWER_TEXT`         | *(unset, built-in default)*              | Override the "nothing found" fallback answer |
+| `KILNWORKS_ANSWER_LANGUAGE`        | *(unset, follows the question's language)* | Force every answer into a specific language |
 
 ## Development
 

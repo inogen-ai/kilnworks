@@ -353,6 +353,28 @@ def test_build_services_prepared_wires_media_extractor(pg_url):
     conn.close()
 
 
+def test_build_services_prepared_wires_query_prompt_settings(pg_url):
+    conn = connect(pg_url)
+    init_db(conn)
+    from kilnworks.wiring import build_services_prepared
+
+    services = build_services_prepared(
+        Settings(
+            database_url=pg_url,
+            fake_providers=True,
+            openai_api_key="",
+            system_prompt="Custom system prompt.",
+            no_answer_text="Nothing found.",
+            answer_language="French",
+        ),
+        conn,
+    )
+    assert services.query._system_prompt == "Custom system prompt."
+    assert services.query._no_answer_text == "Nothing found."
+    assert services.query._answer_language == "French"
+    conn.close()
+
+
 def test_no_connectors_config_yields_empty_registry_and_no_mcp_import(pg_url):
     # This has to run in a *fresh* interpreter, not in-process: `tests/test_wiring.py`
     # (this very module) imports `kilnworks.wiring` at collection time, so by the time

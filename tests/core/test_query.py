@@ -8,7 +8,7 @@ from kilnworks.adapters.embedders.fake import FakeEmbedder
 from kilnworks.adapters.llm.fake import FakeLLM
 from kilnworks.core.errors import ProviderError
 from kilnworks.core.models import CONNECTOR_STATUS_DOWN, ConnectorResult, RetrievedChunk
-from kilnworks.core.query import NO_ANSWER_TEXT, QueryService, format_context
+from kilnworks.core.query import NO_ANSWER_TEXT, SYSTEM_PROMPT, QueryService, format_context
 
 
 class StubIndex:
@@ -85,6 +85,37 @@ def test_format_context_includes_heading_path():
     assert "[1] (doc › Firing temperatures) alpha" in format_context(results)
 
 
+def test_format_context_dedups_first_heading_matching_title():
+    results = [
+        _hit("alpha", title="kiln-basics", heading_path=["Kiln Basics", "Firing temperatures"])
+    ]
+    assert "[1] (kiln-basics › Firing temperatures) alpha" in format_context(results)
+
+
+def test_format_context_keeps_non_matching_first_heading():
+    results = [
+        _hit("alpha", title="kiln-basics", heading_path=["Other heading", "Firing temperatures"])
+    ]
+    assert (
+        "[1] (kiln-basics › Other heading › Firing temperatures) alpha" in format_context(results)
+    )
+
+
+def test_label_dedup_does_not_mutate_citation_heading_path():
+    index = StubIndex(
+        [
+            _hit(
+                "kilns fire hot",
+                title="kiln-basics",
+                heading_path=["Kiln Basics", "Firing temperatures"],
+            )
+        ]
+    )
+    llm = FakeLLM(reply="Hot [1].")
+    answer = QueryService(FakeEmbedder(), index, llm).ask("q")
+    assert answer.citations[0].heading_path == ["Kiln Basics", "Firing temperatures"]
+
+
 def test_citation_carries_heading_path():
     index = StubIndex([_hit("kilns fire hot", heading_path=["Firing temperatures"])])
     llm = FakeLLM(reply="Hot [1].")
@@ -126,6 +157,66 @@ class RecordingCost:
 
     def record_cost(self, kind, model, input_tokens, output_tokens, context, user_id=None):
         self.events.append((kind, model, input_tokens, output_tokens, context, user_id))
+
+
+def test_answer_language_appends_clause_to_system_prompt():
+    index = StubIndex([_hit("a")])
+    llm = FakeLLM()
+    service = QueryService(FakeEmbedder(), index, llm, answer_language="French")
+    service.ask("q")
+    system_prompt, _ = llm.calls[0]
+    assert (
+        "Always write your answer in French, regardless of the language of the "
+        "question or the sources." in system_prompt
+    )
+
+
+def test_no_answer_language_omits_clause_by_default():
+    index = StubIndex([_hit("a")])
+    llm = FakeLLM()
+    QueryService(FakeEmbedder(), index, llm).ask("q")
+    system_prompt, _ = llm.calls[0]
+    assert system_prompt == SYSTEM_PROMPT
+    assert "Always write your answer in" not in system_prompt
+
+
+def test_custom_system_prompt_used_verbatim():
+    index = StubIndex([_hit("a")])
+    llm = FakeLLM()
+    service = QueryService(FakeEmbedder(), index, llm, system_prompt="Custom prompt.")
+    service.ask("q")
+    system_prompt, _ = llm.calls[0]
+    assert system_prompt == "Custom prompt."
+
+
+def test_custom_system_prompt_with_answer_language_clause():
+    index = StubIndex([_hit("a")])
+    llm = FakeLLM()
+    service = QueryService(
+        FakeEmbedder(), index, llm, system_prompt="Custom prompt.", answer_language="Spanish"
+    )
+    service.ask("q")
+    system_prompt, _ = llm.calls[0]
+    assert system_prompt == (
+        "Custom prompt. Always write your answer in Spanish, regardless of the "
+        "language of the question or the sources."
+    )
+
+
+def test_custom_no_answer_text_used_for_empty_retrieval():
+    llm = FakeLLM()
+    service = QueryService(FakeEmbedder(), StubIndex([]), llm, no_answer_text="Nada.")
+    answer = service.ask("q")
+    assert answer.text == "Nada."
+    assert answer.citations == []
+
+
+def test_custom_no_answer_text_used_for_empty_retrieval_stream():
+    llm = FakeLLM()
+    service = QueryService(FakeEmbedder(), StubIndex([]), llm, no_answer_text="Nada.")
+    events = list(service.ask_stream("q"))
+    assert len(events) == 1
+    assert events[0].text == "Nada."
 
 
 def test_ask_records_embedding_and_chat_costs():

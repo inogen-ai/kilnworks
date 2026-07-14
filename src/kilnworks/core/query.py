@@ -36,10 +36,23 @@ _TIMESTAMP_RE = re.compile(r"(?m)^\[(\d{1,2}:\d{2}(?::\d{2})?)\]")
 DEFAULT_CONNECTOR_CONTEXT_CAP = 20
 
 
+def _normalize_heading(text: str) -> str:
+    return re.sub(r"[\s\-_]+", "", text).lower()
+
+
 def _label(result: RetrievedChunk) -> str:
     if not result.heading_path:
         return result.title
-    return f"{result.title} › {' › '.join(result.heading_path)}"
+    heading_path = result.heading_path
+    if _normalize_heading(heading_path[0]) == _normalize_heading(result.title):
+        # The first heading (typically an H1) is just a restatement of the document
+        # title -- e.g. title "kiln-basics" + H1 "Kiln Basics". Rendering both is
+        # redundant, so drop the leading element from the *label* only; the raw
+        # `Citation.heading_path` (built separately in `_parse_citations`) is untouched.
+        heading_path = heading_path[1:]
+    if not heading_path:
+        return result.title
+    return f"{result.title} › {' › '.join(heading_path)}"
 
 
 def format_context(results: Sequence[RetrievedChunk]) -> str:
@@ -85,6 +98,9 @@ class QueryService:
         connector_timeout: float = 8.0,
         connector_result_limit: int = 5,
         connector_context_cap: int = DEFAULT_CONNECTOR_CONTEXT_CAP,
+        system_prompt: str | None = None,
+        no_answer_text: str | None = None,
+        answer_language: str | None = None,
     ):
         self._embedder = embedder
         self._index = index
@@ -94,6 +110,17 @@ class QueryService:
         self._connector_timeout = connector_timeout
         self._connector_result_limit = connector_result_limit
         self._connector_context_cap = connector_context_cap
+        self._system_prompt = system_prompt or SYSTEM_PROMPT
+        self._no_answer_text = no_answer_text or NO_ANSWER_TEXT
+        self._answer_language = answer_language or ""
+
+    def _effective_system_prompt(self) -> str:
+        if not self._answer_language:
+            return self._system_prompt
+        return (
+            f"{self._system_prompt} Always write your answer in {self._answer_language}, "
+            "regardless of the language of the question or the sources."
+        )
 
     def _federated_results(
         self,
@@ -193,8 +220,10 @@ class QueryService:
     ) -> Answer:
         results = self.retrieve(question, principals, limit, user_id, source_ids, connectors)
         if not results:
-            return Answer(text=NO_ANSWER_TEXT, citations=[])
-        completion = self._llm.complete(SYSTEM_PROMPT, build_user_prompt(question, results))
+            return Answer(text=self._no_answer_text, citations=[])
+        completion = self._llm.complete(
+            self._effective_system_prompt(), build_user_prompt(question, results)
+        )
         if self._cost:
             self._cost.record_cost(
                 "chat", completion.model, completion.input_tokens,
@@ -217,10 +246,12 @@ class QueryService:
     ) -> Iterator[str | Answer]:
         results = self.retrieve(question, principals, limit, user_id, source_ids, connectors)
         if not results:
-            yield Answer(text=NO_ANSWER_TEXT, citations=[])
+            yield Answer(text=self._no_answer_text, citations=[])
             return
         completion: Completion | None = None
-        for event in self._llm.stream(SYSTEM_PROMPT, build_user_prompt(question, results)):
+        for event in self._llm.stream(
+            self._effective_system_prompt(), build_user_prompt(question, results)
+        ):
             if isinstance(event, Completion):
                 completion = event
             else:
