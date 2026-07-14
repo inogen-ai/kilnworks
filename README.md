@@ -3,8 +3,9 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/inogen-ai/kilnworks/ci.yml?branch=main&label=CI)](https://github.com/inogen-ai/kilnworks/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
+[![PyPI](https://img.shields.io/pypi/v/kilnworks)](https://pypi.org/project/kilnworks/)
 
-![Kilnworks answering a question with citations — fully local via Ollama](docs/assets/demo.gif)
+![Kilnworks answering a question with citations — fully local via Ollama](https://raw.githubusercontent.com/inogen-ai/kilnworks/main/docs/assets/demo.gif)
 
 **Live site → [kilnworks.inogen.ai](https://kilnworks.inogen.ai)**
 
@@ -18,7 +19,7 @@ CI-gated evals, and OIDC SSO that maps IdP groups to ACLs.
 
 | Sign in | Ask your documents, with citations |
 | --- | --- |
-| ![Kilnworks sign-in screen](docs/assets/login.png) | ![Kilnworks answering a question with a citation](docs/assets/chat.png) |
+| ![Kilnworks sign-in screen](https://raw.githubusercontent.com/inogen-ai/kilnworks/main/docs/assets/login.png) | ![Kilnworks answering a question with a citation](https://raw.githubusercontent.com/inogen-ai/kilnworks/main/docs/assets/chat.png) |
 
 ## Quickstart
 
@@ -74,6 +75,15 @@ The local Ollama default, `nomic-embed-text`, is English-centric, so cross-lingu
 similarity search is noticeably weaker fully offline. Answers themselves follow the
 question's language by default; set `KILNWORKS_ANSWER_LANGUAGE` to pin every answer
 to a specific language regardless of how the question or sources are written.
+
+### Install from PyPI (API + CLI)
+
+Kilnworks is on PyPI: `pip install kilnworks` (or `uvx kilnworks`) gives the
+command-line tool and the REST API — you bring your own Postgres (with the
+`pgvector` extension). The bundled chat UI ships in the Docker image, not the
+wheel, so for the full UI use the Docker Compose quickstart above. Optional
+extras: `kilnworks[connectors]` (MCP connector client) and
+`kilnworks[local-whisper]` (offline audio/video transcription).
 
 ### Local development (CLI)
 
