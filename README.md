@@ -245,60 +245,22 @@ their results into an answer alongside your ingested documents — cited like an
 source. This is federated search, not ingestion: connector data is never copied into
 Kilnworks' database, and every question re-queries the connector fresh.
 
-Connectors are opt-in and "bring your own server" in v1 — the connector server packages
-themselves (Salesforce, Microsoft 365, ServiceNow, HubSpot) are separate sibling projects,
-each published on PyPI and installable with `uvx`, not bundled with Kilnworks.
+![Kilnworks answering from an ingested document and a live Salesforce connector, each cited](https://raw.githubusercontent.com/inogen-ai/kilnworks/main/docs/assets/connectors.gif)
 
-1. `pip install kilnworks[connectors]` (or `uv sync --extra connectors`) — installs the MCP
-   client library.
-2. Install the connector server(s) you want to use and make their command available on
-   `PATH`. InoGen maintains read-only MCP servers as separate sibling repositories, each
-   published on PyPI:
-   [m365](https://github.com/inogen-ai/m365-mcp-server) (`uvx m365-mcp-server`),
-   [ServiceNow](https://github.com/inogen-ai/snow-mcp-server) (`uvx snow-mcp-server`),
-   [Salesforce](https://github.com/inogen-ai/sfdc-mcp-server) (`uvx sfdc-mcp-server`), and
-   [HubSpot](https://github.com/inogen-ai/hubspot-mcp-server) (`uvx --from hubspot-mcp hubspot-mcp-server`).
-3. Write a connectors config JSON and point `KILNWORKS_CONNECTORS_CONFIG` at its path:
+Connectors are opt-in and "bring your own server" in v1. InoGen maintains four read-only
+MCP servers, each published on PyPI and usable in Kilnworks or any MCP client:
+[Salesforce](https://github.com/inogen-ai/sfdc-mcp-server),
+[Microsoft 365](https://github.com/inogen-ai/m365-mcp-server),
+[ServiceNow](https://github.com/inogen-ai/snow-mcp-server), and
+[HubSpot](https://github.com/inogen-ai/hubspot-mcp-server).
 
-       {
-         "connectors": [
-           {
-             "name": "salesforce",
-             "command": ["sfdc-mcp-server"],
-             "env": {"SFDC_INSTANCE_URL": "https://your-org.my.salesforce.com"},
-             "allowed_groups": ["sales"],
-             "search_limit": 5,
-             "search_tool": "search",
-             "query_arg": "term",
-             "limit_arg": "limit",
-             "extra_args": {}
-           }
-         ]
-       }
-
-   `command` is the argv Kilnworks spawns the server's stdio process with — fresh for
-   every query, not once at startup. The spawned process gets a minimal, safe base
-   environment (`PATH`, `HOME`, and similar — never Kilnworks' own secrets like
-   `KILNWORKS_SECRET_KEY` or its database URL), and `env` is merged on top of that base
-   (values pass through shell-style `$VAR` expansion, so you can reference Kilnworks' own
-   environment to pass through a specific secret deliberately). `allowed_groups` is which
-   Kilnworks ACL groups may use this connector (see governance note below). `search_tool`,
-   `query_arg`, and `extra_args` map the question onto whatever the connector server's own
-   search tool expects — they vary per server: Salesforce's tool takes the query under
-   `query_arg: "term"` instead of the default `"query"`; HubSpot's requires `extra_args:
-   {"object_type": "contacts"}` to say which object type to search. `limit_arg` (default
-   `"limit"`) is the tool's result-count argument name; set it to `null` for a search tool
-   that doesn't accept a limit at all.
-4. Device-code connectors (m365, Salesforce) need a one-time interactive login:
-   **pre-authenticate once from a terminal** by running the server's command directly and
-   completing the device-code flow — the resulting token caches to disk, so the per-query
-   spawns Kilnworks does afterward reuse it without re-prompting. Static-credential
-   connectors (ServiceNow, HubSpot) just need their env vars set; no interactive step.
-
-Once configured, `GET /connectors` lists the connectors visible to the caller (name,
-status, whether it still needs the device-code login above), and `POST /ask` accepts an
-optional `"connectors": ["salesforce", ...]` list naming which of those to query for that
-question.
+To enable them: `pip install kilnworks[connectors]`, install the server(s) you want, and
+describe each in a JSON file that `KILNWORKS_CONNECTORS_CONFIG` points at. Each server has
+its own auth (device-code or static token) and search-tool wiring, so the config differs
+per server — **the full guide with copy-paste config for all four is in
+[docs/connectors.md](docs/connectors.md).** Once configured, `GET /connectors` lists the
+connectors visible to the caller, and `POST /ask` accepts an optional
+`"connectors": ["salesforce", ...]` list naming which to query for that question.
 
 **Governance:** each connector authenticates as a single service identity (its own
 credentials/token cache), not per Kilnworks user — so its results are gated at the
