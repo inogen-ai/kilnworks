@@ -24,12 +24,13 @@ class StubIndex:
         return self._results
 
 
-def _hit(text, title="doc", heading_path=None):
+def _hit(text, title="doc", heading_path=None, page=None):
     return RetrievedChunk(
         document_id=uuid4(),
         ordinal=0,
         text=text,
         heading_path=heading_path or [],
+        page=page,
         source_uri=f"file:///{title}.md",
         title=title,
         score=0.9,
@@ -149,6 +150,20 @@ def test_citation_locator_none_for_mid_sentence_bracket():
     llm = FakeLLM(reply="See it [1].")
     answer = QueryService(FakeEmbedder(), index, llm).ask("q")
     assert answer.citations[0].locator is None
+
+
+def test_citation_locator_from_pdf_page():
+    index = StubIndex([_hit("kilns fire at 1300 degrees", page=3)])
+    llm = FakeLLM(reply="Hot [1].")
+    answer = QueryService(FakeEmbedder(), index, llm).ask("q")
+    assert answer.citations[0].locator == "p. 3"
+
+
+def test_citation_page_takes_precedence_over_timestamp():
+    index = StubIndex([_hit("[02:15] this is on page 7", page=7)])
+    llm = FakeLLM(reply="See [1].")
+    answer = QueryService(FakeEmbedder(), index, llm).ask("q")
+    assert answer.citations[0].locator == "p. 7"
 
 
 class RecordingCost:

@@ -59,6 +59,8 @@ export const strings = {
     empty: "Upload a document, then ask it a question.",
     requestFailed: "request failed",
     citationHeadingPath: (headingPath: string[]) => ` › ${headingPath.join(" › ")}`,
-    citationLocator: (locator: string) => ` @ ${locator}`,
+    // Renders both a PDF page locator ("p. 3") and a media timestamp ("02:15") cleanly
+    // on one line after the title/heading, e.g. "kiln-basics › … · p. 3".
+    citationLocator: (locator: string) => ` · ${locator}`,
   },
 } as const;

@@ -71,6 +71,7 @@ class IngestionService:
                                 text=span.text,
                                 heading_path=list(span.heading_path),
                                 acl_tags=doc.acl_tags,
+                                page=span.page,
                             )
                             for ordinal, span in enumerate(spans)
                         ]

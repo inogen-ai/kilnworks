@@ -88,6 +88,10 @@ need a vision/transcription provider configured — see
 [Multimodal ingestion](#multimodal-ingestion) below; everything else works offline with
 zero config.
 
+PDF citations carry a page number (e.g. `p. 3`), so answers point at the exact page.
+PDFs ingested before upgrading to this version must be re-ingested to populate page
+numbers — run `kilnworks init-db` (idempotently adds the column in place) and re-ingest.
+
     uv run kilnworks ask "What temperature does stoneware fire at?"
 
 ## Multimodal ingestion

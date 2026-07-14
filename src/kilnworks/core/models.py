@@ -42,6 +42,10 @@ class Chunk(BaseModel):
     text: str
     heading_path: list[str] = []
     acl_tags: list[str] = ["public"]
+    # 1-based source page number for chunks derived from paginated formats (PDF); the
+    # chunker tags each chunk with the page its content fell on. None for formats
+    # without page markers (Markdown/text/DOCX/HTML/tables/media).
+    page: int | None = None
 
 
 class RetrievedChunk(Chunk):
@@ -56,8 +60,9 @@ class Citation(BaseModel):
     source_uri: str
     title: str
     heading_path: list[str] = []
-    # The media timestamp (e.g. "02:15" or "1:02:15") the citation's chunk text starts
-    # with, for audio/video transcripts; None for chunks that aren't a transcript line.
+    # A short in-document locator for the cited chunk: a PDF page ("p. 3") when the
+    # chunk carries a page, otherwise a leading media timestamp ("02:15"/"1:02:15") for
+    # audio/video transcripts; None when neither applies.
     locator: str | None = None
 
 

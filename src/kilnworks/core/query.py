@@ -64,6 +64,16 @@ def build_user_prompt(question: str, results: Sequence[RetrievedChunk]) -> str:
     return f"Context:\n\n{format_context(results)}\n\nQuestion: {question}"
 
 
+def _locator_for(result: RetrievedChunk) -> str | None:
+    """The citation's locator: a PDF page number (`p. 3`) when the chunk carries one,
+    otherwise a leading transcript timestamp (`02:15`), otherwise None. Page takes
+    precedence — a paginated chunk is never a transcript line."""
+    if result.page is not None:
+        return f"p. {result.page}"
+    timestamp = _TIMESTAMP_RE.search(result.text)
+    return timestamp.group(1) if timestamp else None
+
+
 def _parse_citations(text: str, results: Sequence[RetrievedChunk]) -> list[Citation]:
     citations: list[Citation] = []
     seen: set[int] = set()
@@ -73,7 +83,6 @@ def _parse_citations(text: str, results: Sequence[RetrievedChunk]) -> list[Citat
             continue
         seen.add(n)
         result = results[n - 1]
-        locator_match = _TIMESTAMP_RE.search(result.text)
         citations.append(
             Citation(
                 index=n,
@@ -81,7 +90,7 @@ def _parse_citations(text: str, results: Sequence[RetrievedChunk]) -> list[Citat
                 source_uri=result.source_uri,
                 title=result.title,
                 heading_path=result.heading_path,
-                locator=locator_match.group(1) if locator_match else None,
+                locator=_locator_for(result),
             )
         )
     return citations

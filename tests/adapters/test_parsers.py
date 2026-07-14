@@ -59,6 +59,27 @@ def test_parses_pdf_text(tmp_path):
     assert "Stoneware fires at 1300 degrees" in text
 
 
+def _make_multipage_pdf(path, page_texts):
+    from reportlab.lib.pagesizes import letter
+    from reportlab.pdfgen import canvas
+
+    pdf = canvas.Canvas(str(path), pagesize=letter)
+    for text in page_texts:
+        pdf.drawString(72, 720, text)
+        pdf.showPage()
+    pdf.save()
+
+
+def test_pdf_parse_emits_page_markers(tmp_path):
+    _make_multipage_pdf(tmp_path / "multi.pdf", ["Page one content", "Page two content"])
+    text = parse_file(tmp_path / "multi.pdf").text
+    assert "[[page:1]]" in text
+    assert "[[page:2]]" in text
+    # Markers precede their page's content, in order.
+    assert text.index("[[page:1]]") < text.index("Page one content")
+    assert text.index("Page one content") < text.index("[[page:2]]")
+
+
 def test_parses_docx_paragraphs(tmp_path):
     _make_docx(tmp_path / "doc.docx", ["First paragraph.", "", "Second paragraph."])
     text = parse_file(tmp_path / "doc.docx").text

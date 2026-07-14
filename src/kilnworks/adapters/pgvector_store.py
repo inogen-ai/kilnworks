@@ -13,7 +13,7 @@ from kilnworks.core.models import (
 )
 
 _SEARCH_SQL_BASE = f"""
-SELECT c.id, c.document_id, c.ordinal, c.text, c.heading_path, c.acl_tags,
+SELECT c.id, c.document_id, c.ordinal, c.text, c.heading_path, c.acl_tags, c.page,
        d.source_uri, d.title,
        1 - (c.embedding <=> %(embedding)s) AS score
 FROM chunks c
@@ -93,8 +93,9 @@ class PgVectorStore:
         with self._conn.cursor() as cur:
             cur.executemany(
                 """INSERT INTO chunks
-                       (id, document_id, ordinal, text, heading_path, acl_tags, embedding)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+                       (id, document_id, ordinal, text, heading_path, acl_tags, page,
+                        embedding)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
                 [
                     (
                         chunk.id,
@@ -103,6 +104,7 @@ class PgVectorStore:
                         chunk.text,
                         chunk.heading_path,
                         chunk.acl_tags,
+                        chunk.page,
                         Vector(list(embedding)),
                     )
                     for chunk, embedding in zip(chunks, embeddings, strict=True)
@@ -135,9 +137,10 @@ class PgVectorStore:
                 text=row[3],
                 heading_path=row[4],
                 acl_tags=row[5],
-                source_uri=row[6],
-                title=row[7],
-                score=row[8],
+                page=row[6],
+                source_uri=row[7],
+                title=row[8],
+                score=row[9],
             )
             for row in rows
         ]

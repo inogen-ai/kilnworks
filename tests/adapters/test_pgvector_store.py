@@ -120,6 +120,32 @@ def test_search_none_source_ids_is_unchanged(conn):
     assert any(hit.document_id == doc_id for hit in hits)
 
 
+def test_chunk_page_round_trips_through_upsert_and_search(conn):
+    store, embedder = PgVectorStore(conn), FakeEmbedder()
+    doc = Document(source_uri=f"file:///{uuid4()}.pdf", title="doc", text="page three body")
+    doc_id = store.upsert_document(doc)
+    store.upsert_chunks(
+        [Chunk(document_id=doc_id, ordinal=0, text="page three body", page=3)],
+        embedder.embed(["page three body"]).vectors,
+    )
+    store.mark_document(doc_id, "ready")
+    hit = store.search(embedder.embed(["page three body"]).vectors[0], ["public"])[0]
+    assert hit.page == 3
+
+
+def test_chunk_without_page_round_trips_as_none(conn):
+    store, embedder = PgVectorStore(conn), FakeEmbedder()
+    doc = Document(source_uri=f"file:///{uuid4()}.md", title="doc", text="no page here")
+    doc_id = store.upsert_document(doc)
+    store.upsert_chunks(
+        [Chunk(document_id=doc_id, ordinal=0, text="no page here")],
+        embedder.embed(["no page here"]).vectors,
+    )
+    store.mark_document(doc_id, "ready")
+    hit = store.search(embedder.embed(["no page here"]).vectors[0], ["public"])[0]
+    assert hit.page is None
+
+
 def test_search_result_carries_document_metadata(conn):
     store, embedder = PgVectorStore(conn), FakeEmbedder()
     _seed(store, embedder, "observability guide", ["public"])

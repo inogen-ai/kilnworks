@@ -24,8 +24,12 @@ CREATE TABLE IF NOT EXISTS chunks (
     text TEXT NOT NULL,
     heading_path TEXT[] NOT NULL DEFAULT '{{}}',
     acl_tags TEXT[] NOT NULL DEFAULT '{{public}}',
+    page INTEGER,
     embedding vector({dimensions}) NOT NULL
 );
+-- Idempotent upgrade for installs created before `page` existed; the column is
+-- nullable and existing docs need re-ingesting to populate it.
+ALTER TABLE chunks ADD COLUMN IF NOT EXISTS page INTEGER;
 
 CREATE INDEX IF NOT EXISTS chunks_embedding_idx
     ON chunks USING hnsw (embedding vector_cosine_ops);

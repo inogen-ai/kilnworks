@@ -86,7 +86,37 @@ describe("Chat — citation rendering", () => {
     await ask("How hot?");
 
     expect(await screen.findByText("[1] kiln-basics › Firing temperatures")).toBeInTheDocument();
-    expect(await screen.findByText("[3] onboarding-call @ 02:15")).toBeInTheDocument();
+    expect(await screen.findByText("[3] onboarding-call · 02:15")).toBeInTheDocument();
+  });
+
+  it("renders a PDF page locator alongside the citation", async () => {
+    vi.mocked(askStream).mockImplementation(
+      fakeAskStream([
+        {
+          index: 1,
+          chunk_id: "c1",
+          source_uri: "file:///handbook.pdf",
+          title: "handbook",
+          heading_path: ["Kiln Basics"],
+          locator: "p. 3",
+        },
+      ]) as unknown as typeof askStream,
+    );
+
+    render(
+      <Chat
+        token="tok"
+        onAuthError={vi.fn()}
+        selection={emptySelection}
+        catalog={emptyCatalog}
+      />,
+    );
+
+    await ask("How hot?");
+
+    expect(
+      await screen.findByText("[1] handbook › Kiln Basics · p. 3"),
+    ).toBeInTheDocument();
   });
 
   it("renders a plain citation when there is no heading path or locator", async () => {

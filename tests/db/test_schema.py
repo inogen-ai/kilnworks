@@ -19,6 +19,15 @@ def test_chunks_embedding_column_is_vector_1536(conn):
     assert row[0] == 1536
 
 
+def test_chunks_has_nullable_page_column(conn):
+    row = conn.execute(
+        """SELECT is_nullable FROM information_schema.columns
+           WHERE table_name = 'chunks' AND column_name = 'page'"""
+    ).fetchone()
+    assert row is not None  # column exists
+    assert row[0] == "YES"  # nullable
+
+
 def _chunks_embedding_typmod(conn):
     return conn.execute(
         """SELECT atttypmod FROM pg_attribute

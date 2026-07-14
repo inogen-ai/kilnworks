@@ -157,8 +157,16 @@ def _extract_media(
 
 
 def _parse_pdf(path: Path) -> str:
+    # Emit a `[[page:N]]` marker line at the start of each page. The chunker
+    # (core/chunking.py) treats each marker as a flush point and tags the following
+    # chunk with its 1-based page number, then strips the marker so it never reaches
+    # chunk text. See _PAGE_MARKER_RE there.
     reader = PdfReader(path)
-    return "\n\n".join((page.extract_text() or "").strip() for page in reader.pages).strip()
+    parts = [
+        f"[[page:{i + 1}]]\n{(page.extract_text() or '').strip()}"
+        for i, page in enumerate(reader.pages)
+    ]
+    return "\n\n".join(parts).strip()
 
 
 def _parse_docx(path: Path) -> str:
