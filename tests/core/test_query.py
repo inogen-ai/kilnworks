@@ -8,7 +8,7 @@ from kilnworks.adapters.embedders.fake import FakeEmbedder
 from kilnworks.adapters.llm.fake import FakeLLM
 from kilnworks.core.errors import ProviderError
 from kilnworks.core.models import CONNECTOR_STATUS_DOWN, ConnectorResult, RetrievedChunk
-from kilnworks.core.query import NO_ANSWER_TEXT, QueryService
+from kilnworks.core.query import NO_ANSWER_TEXT, QueryService, format_context
 
 
 class StubIndex:
@@ -24,11 +24,12 @@ class StubIndex:
         return self._results
 
 
-def _hit(text, title="doc"):
+def _hit(text, title="doc", heading_path=None):
     return RetrievedChunk(
         document_id=uuid4(),
         ordinal=0,
         text=text,
+        heading_path=heading_path or [],
         source_uri=f"file:///{title}.md",
         title=title,
         score=0.9,
@@ -77,6 +78,46 @@ def test_context_blocks_are_numbered_in_prompt():
     assert "[1] (doc) alpha" in user_prompt
     assert "[2] (b) beta" in user_prompt
     assert user_prompt.rstrip().endswith("Question: q")
+
+
+def test_format_context_includes_heading_path():
+    results = [_hit("alpha", title="doc", heading_path=["Firing temperatures"])]
+    assert "[1] (doc › Firing temperatures) alpha" in format_context(results)
+
+
+def test_citation_carries_heading_path():
+    index = StubIndex([_hit("kilns fire hot", heading_path=["Firing temperatures"])])
+    llm = FakeLLM(reply="Hot [1].")
+    answer = QueryService(FakeEmbedder(), index, llm).ask("q")
+    assert answer.citations[0].heading_path == ["Firing temperatures"]
+
+
+def test_citation_locator_from_line_start_timestamp():
+    index = StubIndex([_hit("[02:15] welcome to the call")])
+    llm = FakeLLM(reply="Said hi [1].")
+    answer = QueryService(FakeEmbedder(), index, llm).ask("q")
+    assert answer.citations[0].locator == "02:15"
+
+
+def test_citation_locator_from_hour_timestamp():
+    index = StubIndex([_hit("[1:02:15] later in the call")])
+    llm = FakeLLM(reply="Later [1].")
+    answer = QueryService(FakeEmbedder(), index, llm).ask("q")
+    assert answer.citations[0].locator == "1:02:15"
+
+
+def test_citation_locator_none_for_normal_doc():
+    index = StubIndex([_hit("kilns fire at 1300 degrees")])
+    llm = FakeLLM(reply="Hot [1].")
+    answer = QueryService(FakeEmbedder(), index, llm).ask("q")
+    assert answer.citations[0].locator is None
+
+
+def test_citation_locator_none_for_mid_sentence_bracket():
+    index = StubIndex([_hit("call started, see note [12:34] for details")])
+    llm = FakeLLM(reply="See it [1].")
+    answer = QueryService(FakeEmbedder(), index, llm).ask("q")
+    assert answer.citations[0].locator is None
 
 
 class RecordingCost:

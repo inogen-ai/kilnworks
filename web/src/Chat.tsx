@@ -111,6 +111,9 @@ export default function Chat({
                 {message.citations.map((citation) => (
                   <li key={citation.index}>
                     [{citation.index}] {citation.title}
+                    {citation.heading_path.length > 0 &&
+                      ` › ${citation.heading_path.join(" › ")}`}
+                    {citation.locator && ` @ ${citation.locator}`}
                   </li>
                 ))}
               </ul>

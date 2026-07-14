@@ -14,6 +14,8 @@ export type Citation = {
   chunk_id: string;
   source_uri: string;
   title: string;
+  heading_path: string[];
+  locator: string | null;
 };
 
 export type Answer = { text: string; citations: Citation[]; model: string };

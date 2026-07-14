@@ -1,0 +1,101 @@
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("./api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./api")>();
+  return {
+    ...actual,
+    askStream: vi.fn(),
+  };
+});
+
+import { askStream } from "./api";
+import Chat from "./Chat";
+import { emptyCatalog, emptySelection } from "./Sources";
+import type { SseEvent } from "./sse";
+
+// Minimal async-generator helper: yields one "answer" SSE event carrying the
+// given citations, mirroring what askStream (web/src/api.ts) produces once
+// the backend's terminal `answer` event lands.
+function fakeAskStream(citations: unknown[]) {
+  return async function* (): AsyncGenerator<SseEvent> {
+    yield {
+      event: "answer",
+      data: { text: "Fired at high heat.", citations, model: "fake" },
+    };
+  };
+}
+
+async function ask(question: string) {
+  const input = screen.getByPlaceholderText(/ask your documents/i);
+  await userEvent.type(input, question);
+  await userEvent.click(screen.getByRole("button", { name: /ask/i }));
+}
+
+describe("Chat — citation rendering", () => {
+  it("renders heading path and media locator alongside the citation", async () => {
+    vi.mocked(askStream).mockImplementation(
+      fakeAskStream([
+        {
+          index: 1,
+          chunk_id: "c1",
+          source_uri: "file:///kiln-basics.md",
+          title: "kiln-basics",
+          heading_path: ["Firing temperatures"],
+          locator: null,
+        },
+        {
+          index: 3,
+          chunk_id: "c3",
+          source_uri: "file:///onboarding-call.mp3",
+          title: "onboarding-call",
+          heading_path: [],
+          locator: "02:15",
+        },
+      ]) as unknown as typeof askStream,
+    );
+
+    render(
+      <Chat
+        token="tok"
+        onAuthError={vi.fn()}
+        selection={emptySelection}
+        catalog={emptyCatalog}
+      />,
+    );
+
+    await ask("How hot?");
+
+    expect(await screen.findByText("[1] kiln-basics › Firing temperatures")).toBeInTheDocument();
+    expect(await screen.findByText("[3] onboarding-call @ 02:15")).toBeInTheDocument();
+  });
+
+  it("renders a plain citation when there is no heading path or locator", async () => {
+    vi.mocked(askStream).mockImplementation(
+      fakeAskStream([
+        {
+          index: 1,
+          chunk_id: "c1",
+          source_uri: "file:///doc.md",
+          title: "doc",
+          heading_path: [],
+          locator: null,
+        },
+      ]) as unknown as typeof askStream,
+    );
+
+    render(
+      <Chat
+        token="tok"
+        onAuthError={vi.fn()}
+        selection={emptySelection}
+        catalog={emptyCatalog}
+      />,
+    );
+
+    await ask("How hot?");
+
+    expect(await screen.findByText("[1] doc")).toBeInTheDocument();
+  });
+});

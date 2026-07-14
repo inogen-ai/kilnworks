@@ -55,6 +55,10 @@ class Citation(BaseModel):
     chunk_id: UUID
     source_uri: str
     title: str
+    heading_path: list[str] = []
+    # The media timestamp (e.g. "02:15" or "1:02:15") the citation's chunk text starts
+    # with, for audio/video transcripts; None for chunks that aren't a transcript line.
+    locator: str | None = None
 
 
 class Answer(BaseModel):

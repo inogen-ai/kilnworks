@@ -23,6 +23,12 @@ SYSTEM_PROMPT = (
 
 NO_ANSWER_TEXT = "I couldn't find anything relevant in the knowledge base for that question."
 
+# Matches a transcript timestamp line as rendered by `adapters/media/transcript.py`
+# ("[MM:SS] text" or "[HH:MM:SS] text"). Anchored to the start of a line (re.MULTILINE)
+# so a stray "[12:34]"-shaped bracket mid-sentence in an ordinary document doesn't
+# false-match -- transcription always places the timestamp at the start of its line.
+_TIMESTAMP_RE = re.compile(r"(?m)^\[(\d{1,2}:\d{2}(?::\d{2})?)\]")
+
 # Hard cap on how many federated (connector) context blocks a single query can append,
 # regardless of how many connectors are selected or how many results each returns.
 # Without this, N selected connectors each returning connector_result_limit results
@@ -30,8 +36,14 @@ NO_ANSWER_TEXT = "I couldn't find anything relevant in the knowledge base for th
 DEFAULT_CONNECTOR_CONTEXT_CAP = 20
 
 
+def _label(result: RetrievedChunk) -> str:
+    if not result.heading_path:
+        return result.title
+    return f"{result.title} › {' › '.join(result.heading_path)}"
+
+
 def format_context(results: Sequence[RetrievedChunk]) -> str:
-    blocks = [f"[{i + 1}] ({r.title}) {r.text}" for i, r in enumerate(results)]
+    blocks = [f"[{i + 1}] ({_label(r)}) {r.text}" for i, r in enumerate(results)]
     return "\n\n".join(blocks)
 
 
@@ -48,8 +60,16 @@ def _parse_citations(text: str, results: Sequence[RetrievedChunk]) -> list[Citat
             continue
         seen.add(n)
         result = results[n - 1]
+        locator_match = _TIMESTAMP_RE.search(result.text)
         citations.append(
-            Citation(index=n, chunk_id=result.id, source_uri=result.source_uri, title=result.title)
+            Citation(
+                index=n,
+                chunk_id=result.id,
+                source_uri=result.source_uri,
+                title=result.title,
+                heading_path=result.heading_path,
+                locator=locator_match.group(1) if locator_match else None,
+            )
         )
     return citations
 
