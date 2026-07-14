@@ -6,11 +6,19 @@
 
 ![Kilnworks answering a question with citations — fully local via Ollama](docs/assets/demo.gif)
 
+**Live site → [kilnworks.inogen.ai](https://kilnworks.inogen.ai)**
+
 Self-hostable RAG assistant that enforces document ACLs at retrieval — every chunk carries
 its source document's ACL and queries are filtered by caller identity before ranking —
 backed by a five-minute Compose quickstart with a fully-offline fake-provider mode and the
 production posture tutorials skip: a lease-reclaiming job queue, a per-user cost ledger,
 CI-gated evals, and OIDC SSO that maps IdP groups to ACLs.
+
+## Screenshots
+
+| Sign in | Ask your documents, with citations |
+| --- | --- |
+| ![Kilnworks sign-in screen](docs/assets/login.png) | ![Kilnworks answering a question with a citation](docs/assets/chat.png) |
 
 ## Quickstart
 
