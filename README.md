@@ -69,6 +69,17 @@ Kilnworks defaults to OpenAI for both chat and embeddings. Two other flavors are
   the schema at the new dimensions) followed by a fresh `docker compose up -d --build`
   and re-ingest.
 
+  **Model sizing.** The offline default is `llama3.2` (a 3B chat model, ~2 GB download)
+  paired with `nomic-embed-text` (~274 MB) — deliberately small so fully-local mode runs
+  on an ordinary laptop with no GPU. Because retrieval supplies the answer's context, a
+  small model is usually adequate for grounded question-answering; it trades some answer
+  quality for running anywhere. If you have the hardware — a 70B model needs roughly 40 GB
+  of RAM/VRAM and a ~40 GB download — point `KILNWORKS_OLLAMA_CHAT_MODEL` at something
+  larger (e.g. `llama3.3:70b`) and raise `KILNWORKS_OLLAMA_NUM_CTX`. For the best quality
+  without local hardware, use the default OpenAI or Anthropic chat providers instead.
+  (This concerns only the chat model — a larger model doesn't change retrieval, which
+  stays on the small embedding model.)
+
 Multilingual retrieval — asking questions in a language other than your source
 documents, or vice versa — works best with a cloud embedding provider (OpenAI).
 The local Ollama default, `nomic-embed-text`, is English-centric, so cross-lingual
