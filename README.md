@@ -222,17 +222,17 @@ Kilnworks' database, and every question re-queries the connector fresh.
 
 Connectors are opt-in and "bring your own server" in v1 — the connector server packages
 themselves (Salesforce, Microsoft 365, ServiceNow, HubSpot) are separate sibling projects,
-not bundled with Kilnworks or published to PyPI yet.
+each published on PyPI and installable with `uvx`, not bundled with Kilnworks.
 
 1. `pip install kilnworks[connectors]` (or `uv sync --extra connectors`) — installs the MCP
    client library.
 2. Install the connector server(s) you want to use and make their command available on
-   `PATH`. InoGen maintains read-only MCP servers as separate sibling repositories (not
-   yet published to PyPI — install directly from source per each repo's own setup):
-   [m365](https://github.com/inogen-ai/m365-mcp-server),
-   [ServiceNow](https://github.com/inogen-ai/snow-mcp-server),
-   [Salesforce](https://github.com/inogen-ai/sfdc-mcp-server), and
-   [HubSpot](https://github.com/inogen-ai/hubspot-mcp-server).
+   `PATH`. InoGen maintains read-only MCP servers as separate sibling repositories, each
+   published on PyPI:
+   [m365](https://github.com/inogen-ai/m365-mcp-server) (`uvx m365-mcp-server`),
+   [ServiceNow](https://github.com/inogen-ai/snow-mcp-server) (`uvx snow-mcp-server`),
+   [Salesforce](https://github.com/inogen-ai/sfdc-mcp-server) (`uvx sfdc-mcp-server`), and
+   [HubSpot](https://github.com/inogen-ai/hubspot-mcp-server) (`uvx --from hubspot-mcp hubspot-mcp-server`).
 3. Write a connectors config JSON and point `KILNWORKS_CONNECTORS_CONFIG` at its path:
 
        {
@@ -280,7 +280,10 @@ credentials/token cache), not per Kilnworks user — so its results are gated at
 Kilnworks level by `allowed_groups` matched against the caller's ACL principals, not by
 what that individual user could see in the source system. `KILNWORKS_CONNECTOR_TIMEOUT`
 (default 8s) bounds each connector call, and a slow, timed-out, or failing connector is
-skipped rather than failing the whole `/ask`.
+skipped rather than failing the whole `/ask`. `KILNWORKS_CONNECTOR_RESULT_LIMIT` (default 5)
+caps how many results each connector returns per question, and
+`KILNWORKS_CONNECTOR_CONTEXT_CAP` (default 20) bounds the total connector results blended
+into a single answer.
 
 Connectors are entirely opt-in: leave `KILNWORKS_CONNECTORS_CONFIG` unset and Kilnworks
 behaves exactly as the base/offline quickstart above describes.
@@ -325,6 +328,8 @@ Endpoints:
 - `GET /documents` — list documents visible to the caller's ACL principals.
 - `POST /documents` — multipart file upload; enqueues an ingestion job and returns `202`
   with a `job_id`.
+- `DELETE /documents/{document_id}` — delete a document and its chunks, scoped to the
+  caller's ACL principals.
 - `GET /jobs/{id}` — poll job status (`queued`/`running`/`done`/`failed`), scoped to the
   uploader.
 - `POST /ask` — ask a question, get a single JSON `Answer` back.

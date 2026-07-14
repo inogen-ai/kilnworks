@@ -25,6 +25,6 @@ termination, secrets management, OS patching). Configuration secrets
 environment variables or a secrets manager — never commit them.
 
 Some things are documented non-goals rather than vulnerabilities — see
-[docs/limitations.md](docs/limitations.md) for the current list, including that
+[docs/limitations.md](docs/limitations.md) for the current list. Note that
 Kilnworks does not terminate TLS itself and expects a reverse proxy in front of
 it for internet-facing deployments.
