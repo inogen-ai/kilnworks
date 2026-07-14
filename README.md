@@ -98,7 +98,21 @@ extras: `kilnworks[connectors]` (MCP connector client) and
 
 ### Local development (CLI)
 
-    docker compose up -d db
+Kilnworks needs a Postgres database with the
+[`pgvector`](https://github.com/pgvector/pgvector) extension. The quickest way to get one
+is the bundled compose service:
+
+    docker compose up -d db        # convenience: a pgvector-ready Postgres on localhost:5432
+
+**Not using Docker?** Point Kilnworks at any Postgres that has `pgvector` available — no
+compose required. Install the extension on that server (e.g. `apt install
+postgresql-17-pgvector` matching your Postgres major version, `brew install pgvector`, or
+enable it from your managed provider's extension catalog), then set
+`KILNWORKS_DATABASE_URL` to your instance. You do **not** need to run `CREATE EXTENSION`
+or create tables by hand — `kilnworks init-db` runs `CREATE EXTENSION IF NOT EXISTS vector`
+and builds the schema for you:
+
+    export KILNWORKS_DATABASE_URL=postgresql://user:pass@localhost:5432/kilnworks  # default is postgresql://kilnworks:kilnworks@localhost:5432/kilnworks
     export KILNWORKS_OPENAI_API_KEY=sk-...   # or KILNWORKS_FAKE_PROVIDERS=true to try it offline
     uv run kilnworks init-db
     uv run kilnworks ingest examples/corpus
