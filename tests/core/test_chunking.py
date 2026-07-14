@@ -140,6 +140,19 @@ def test_no_page_markers_yields_page_none_and_byte_identical_chunks():
     ]
 
 
+def test_out_of_range_page_marker_is_treated_as_ordinary_text():
+    """A page value that overflows the DB's int4 `page` column (e.g. from a malformed or
+    adversarial [[page:N]] line) must not be treated as a marker -- otherwise ingestion
+    fails deep in the DB layer with a cryptic NumericValueOutOfRange error. The line
+    should instead flow through as ordinary body text, with page left None."""
+    text = "[[page:9999999999]]\nBody text on the line."
+    spans = HeadingAwareChunker().chunk(text)
+    assert len(spans) == 1
+    assert "[[page:9999999999]]" in spans[0].text
+    assert "Body text on the line." in spans[0].text
+    assert spans[0].page is None
+
+
 def test_invalid_chunker_params_are_rejected():
     with pytest.raises(ValueError):
         HeadingAwareChunker(max_chars=100, overlap_chars=100)

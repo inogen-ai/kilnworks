@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { ApiError, askStream, type Answer, type Citation } from "./api";
+import { dedupHeadingPath } from "./citation";
 import { askPayload } from "./selection";
 import type { Catalog, Selection } from "./Sources";
 import { strings } from "./strings";
@@ -107,14 +108,16 @@ export default function Chat({
             <p>{message.text || strings.chat.busy}</p>
             {message.citations && message.citations.length > 0 && (
               <ul className="citations">
-                {message.citations.map((citation) => (
-                  <li key={citation.index}>
-                    [{citation.index}] {citation.title}
-                    {citation.heading_path.length > 0 &&
-                      strings.chat.citationHeadingPath(citation.heading_path)}
-                    {citation.locator && strings.chat.citationLocator(citation.locator)}
-                  </li>
-                ))}
+                {message.citations.map((citation) => {
+                  const headingPath = dedupHeadingPath(citation.title, citation.heading_path);
+                  return (
+                    <li key={citation.index}>
+                      [{citation.index}] {citation.title}
+                      {headingPath.length > 0 && strings.chat.citationHeadingPath(headingPath)}
+                      {citation.locator && strings.chat.citationLocator(citation.locator)}
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>

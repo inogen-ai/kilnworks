@@ -119,6 +119,37 @@ describe("Chat — citation rendering", () => {
     ).toBeInTheDocument();
   });
 
+  it("drops a leading heading that just restates the document title", async () => {
+    vi.mocked(askStream).mockImplementation(
+      fakeAskStream([
+        {
+          index: 1,
+          chunk_id: "c1",
+          source_uri: "file:///kiln-basics.md",
+          title: "kiln-basics",
+          heading_path: ["Kiln Basics", "Firing temperatures"],
+          locator: null,
+        },
+      ]) as unknown as typeof askStream,
+    );
+
+    render(
+      <Chat
+        token="tok"
+        onAuthError={vi.fn()}
+        selection={emptySelection}
+        catalog={emptyCatalog}
+      />,
+    );
+
+    await ask("How hot?");
+
+    expect(
+      await screen.findByText("[1] kiln-basics › Firing temperatures"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Kiln Basics › Firing temperatures/)).not.toBeInTheDocument();
+  });
+
   it("renders a plain citation when there is no heading path or locator", async () => {
     vi.mocked(askStream).mockImplementation(
       fakeAskStream([

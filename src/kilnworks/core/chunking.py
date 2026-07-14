@@ -8,6 +8,12 @@ from dataclasses import dataclass
 # chunk output is unchanged.
 _PAGE_MARKER_RE = re.compile(r"^\[\[page:(\d+)\]\]$")
 
+# The DB `page` column is a Postgres INTEGER (int4). A marker value beyond this range
+# would overflow that column and blow up ingestion with a cryptic NumericValueOutOfRange
+# error deep in the DB layer. Such a line is almost certainly not a real page marker (no
+# real document has a billion pages) -- treat it as ordinary body text instead of crashing.
+_MAX_INT4 = 2_147_483_647
+
 
 @dataclass(frozen=True)
 class ChunkSpan:
@@ -60,7 +66,7 @@ class HeadingAwareChunker:
             # then updates the current page for the section that follows it. The marker
             # line itself is dropped, never appended to `lines`.
             marker = _PAGE_MARKER_RE.match(stripped)
-            if marker:
+            if marker and int(marker.group(1)) <= _MAX_INT4:
                 flush()
                 current_page = int(marker.group(1))
                 continue
