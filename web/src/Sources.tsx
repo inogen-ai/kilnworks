@@ -11,6 +11,9 @@ import {
   type DocumentInfo,
   type JobInfo,
 } from "./api";
+import FileIcon from "./FileIcon";
+import { fileKind } from "./fileType";
+import { metadataRows } from "./metadataView";
 import { strings } from "./strings";
 
 export type Selection = {
@@ -138,16 +141,41 @@ export default function Sources({
   const MAX_POLLS = 200;
   const MAX_CONSECUTIVE_ERRORS = 4;
 
-  async function handleUpload(file: File) {
+  async function handleUpload(files: File[]) {
+    if (files.length === 0) return;
     setUploading(true);
-    setNotice(strings.sources.uploadingFile(file.name));
+    // jobId -> filename for every file that enqueued successfully; POST failures
+    // (the file never became a document row) are tracked separately for the summary.
+    const inFlight = new Map<number, string>();
+    const failedUploads: string[] = [];
     try {
-      const jobId = await uploadDocument(token, file);
+      // Phase 1: enqueue each file (one POST + ingestion job apiece).
+      for (const file of files) {
+        setNotice(strings.sources.uploadingFile(file.name));
+        try {
+          const jobId = await uploadDocument(token, file);
+          inFlight.set(jobId, file.name);
+        } catch (err) {
+          if (!aliveRef.current) return;
+          if (err instanceof ApiError && err.status === 401) {
+            onAuthError();
+            return;
+          }
+          failedUploads.push(file.name);
+        }
+        if (!aliveRef.current) return;
+      }
+      // Show the freshly-enqueued documents (as "pending") right away.
+      await refreshDocuments();
       if (!aliveRef.current) return;
-      let status = "queued";
+
+      // Phase 2: poll the batch until every job reaches a terminal state, so the
+      // per-row status dots flip pending -> ready/failed as the worker drains them.
+      // Individual ingestion failures surface on their own row (red dot + Details);
+      // the notice only reports batch progress and files that never uploaded.
       let polls = 0;
       let consecutiveErrors = 0;
-      while (status === "queued" || status === "running") {
+      while (inFlight.size > 0) {
         await new Promise((resolve) => setTimeout(resolve, 1500));
         if (!aliveRef.current) return;
         polls += 1;
@@ -155,29 +183,42 @@ export default function Sources({
           setNotice(strings.sources.stillProcessing);
           break;
         }
-        let job: JobInfo;
-        try {
-          job = await getJob(token, jobId);
-        } catch (err) {
-          if (!aliveRef.current) return;
-          if (err instanceof ApiError && err.status === 401) {
-            onAuthError();
-            return;
+        const finished: number[] = [];
+        let tickHadError = false;
+        for (const jobId of inFlight.keys()) {
+          let job: JobInfo;
+          try {
+            job = await getJob(token, jobId);
+          } catch (err) {
+            if (!aliveRef.current) return;
+            if (err instanceof ApiError && err.status === 401) {
+              onAuthError();
+              return;
+            }
+            tickHadError = true;
+            continue; // leave it in flight; retry next tick
           }
+          if (job.status === "done" || job.status === "failed") finished.push(jobId);
+        }
+        for (const jobId of finished) inFlight.delete(jobId);
+        if (tickHadError) {
           consecutiveErrors += 1;
-          if (consecutiveErrors > MAX_CONSECUTIVE_ERRORS) {
-            setNotice(err instanceof Error ? err.message : strings.sources.uploadFailed);
-            break;
-          }
-          continue;
+          if (consecutiveErrors > MAX_CONSECUTIVE_ERRORS) break;
+        } else {
+          consecutiveErrors = 0;
         }
         if (!aliveRef.current) return;
-        consecutiveErrors = 0;
-        status = job.status;
-        if (status === "failed") setNotice(job.error ?? strings.sources.ingestionFailed);
+        if (inFlight.size > 0 && files.length > 1) {
+          setNotice(strings.sources.processingCount(inFlight.size, files.length));
+        }
+        await refreshDocuments();
+        if (!aliveRef.current) return;
       }
-      if (!aliveRef.current) return;
-      if (status === "done") setNotice(null);
+      setNotice(
+        failedUploads.length > 0
+          ? strings.sources.someUploadsFailed(failedUploads.length)
+          : null,
+      );
       await refreshDocuments();
     } catch (err) {
       if (!aliveRef.current) return;
@@ -276,43 +317,72 @@ export default function Sources({
         <input
           ref={fileRef}
           type="file"
+          multiple
           accept=".md,.txt,.pdf,.docx,.html,.htm,.csv,.tsv,.xlsx,.png,.jpg,.jpeg,.gif,.webp,.mp3,.wav,.m4a,.mp4,.mov"
           hidden
-          onChange={(e) => e.target.files?.[0] && void handleUpload(e.target.files[0])}
+          onChange={(e) => {
+            if (e.target.files && e.target.files.length > 0) {
+              void handleUpload(Array.from(e.target.files));
+            }
+          }}
         />
       </div>
       {notice && <p className="notice">{notice}</p>}
       <ul className="source-list">
-        {documents.map((doc) => (
-          <li key={doc.id} className="source-row">
-            <label className="source-row-main">
-              <input
-                type="checkbox"
-                checked={selection.documentIds.has(doc.id)}
-                onChange={() => toggleDocument(doc.id)}
-              />
-              <span className={`dot ${doc.status}`} />
-              <span className="doc-title">{doc.title}</span>
-            </label>
-            <div className="source-row-actions">
-              {doc.status === "failed" && doc.error && (
-                <button className="ghost small" onClick={() => toggleDetails(doc.id)}>
-                  {strings.sources.details}
+        {documents.map((doc) => {
+          const kind = fileKind(doc.source_uri);
+          const open = openDetails.has(doc.id);
+          const rows = open
+            ? metadataRows(doc.metadata ?? {}, doc.created_at, kind.label)
+            : [];
+          return (
+            <li key={doc.id} className="source-row">
+              <label className="source-row-main">
+                <input
+                  type="checkbox"
+                  checked={selection.documentIds.has(doc.id)}
+                  onChange={() => toggleDocument(doc.id)}
+                />
+                <span className={`dot ${doc.status}`} />
+                <FileIcon category={kind.category} />
+                <span className="doc-title">{doc.title}</span>
+              </label>
+              <div className="source-row-actions">
+                <button
+                  className="ghost small"
+                  title={open ? strings.sources.hideDetailsTitle : strings.sources.detailsTitle}
+                  aria-expanded={open}
+                  aria-controls={`doc-meta-${doc.id}`}
+                  onClick={() => toggleDetails(doc.id)}
+                >
+                  {open ? strings.sources.hideDetails : strings.sources.details}
                 </button>
+                <button
+                  className="ghost small danger"
+                  title={strings.sources.deleteTitle}
+                  onClick={() => void handleDelete(doc)}
+                >
+                  {strings.sources.deleteSymbol}
+                </button>
+              </div>
+              {open && (
+                <div className="doc-meta" id={`doc-meta-${doc.id}`}>
+                  <dl className="doc-meta-list">
+                    {rows.map((row) => (
+                      <div className="doc-meta-row" key={row.label}>
+                        <dt>{row.label}</dt>
+                        <dd>{row.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                  {doc.status === "failed" && doc.error && (
+                    <p className="doc-error">{doc.error}</p>
+                  )}
+                </div>
               )}
-              <button
-                className="ghost small danger"
-                title={strings.sources.deleteTitle}
-                onClick={() => void handleDelete(doc)}
-              >
-                {strings.sources.deleteSymbol}
-              </button>
-            </div>
-            {doc.status === "failed" && doc.error && openDetails.has(doc.id) && (
-              <p className="doc-error">{doc.error}</p>
-            )}
-          </li>
-        ))}
+            </li>
+          );
+        })}
         {documents.length === 0 && <li className="empty">{strings.sources.noDocuments}</li>}
       </ul>
 

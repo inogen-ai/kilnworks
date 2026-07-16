@@ -29,4 +29,5 @@ class SingleFileSource:
             text=parsed.text,
             acl_tags=self._acl_tags,
             extraction_usage=parsed.usage,
+            metadata=parsed.metadata,
         )

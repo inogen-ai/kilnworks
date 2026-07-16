@@ -205,13 +205,17 @@ def create_app(settings: Settings) -> FastAPI:
         conn=Depends(get_conn),
     ) -> list[DocumentInfo]:
         rows = conn.execute(
-            "SELECT id, source_uri, title, status, error FROM documents"
+            "SELECT id, source_uri, title, status, error, metadata, created_at FROM documents"
             " WHERE acl_tags && %s::text[] ORDER BY created_at",
             (list(claims.principals),),
         ).fetchall()
         return [
-            DocumentInfo(id=str(row[0]), source_uri=row[1], title=row[2],
-                         status=row[3], error=row[4])
+            DocumentInfo(
+                id=str(row[0]), source_uri=row[1], title=row[2],
+                status=row[3], error=row[4],
+                metadata=row[5] or {},
+                created_at=row[6].isoformat() if row[6] is not None else None,
+            )
             for row in rows
         ]
 

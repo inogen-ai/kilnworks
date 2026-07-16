@@ -33,6 +33,13 @@ class Document(BaseModel):
     # attached here so `IngestionService.ingest` — the one place that knows the
     # ingesting `user_id` — can record their cost. Empty for text/tables/pdf/etc.
     extraction_usage: list[Completion] = []
+    # Type-specific descriptive metadata captured at parse time (size_bytes,
+    # content_type, plus per-format keys: page_count for PDF, width/height for
+    # images, duration_seconds/segment_count for media, row_count/sheet_count for
+    # tables, word_count for text). Best-effort — a capture failure leaves the key
+    # out rather than failing ingestion. `chunk_count` is added by the ingestion
+    # service once chunking is done. Surfaced to the UI via GET /documents.
+    metadata: dict[str, object] = Field(default_factory=dict)
 
 
 class Chunk(BaseModel):

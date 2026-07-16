@@ -32,6 +32,8 @@ class DocumentInfo(BaseModel):
     title: str
     status: str
     error: str | None = None
+    metadata: dict[str, object] = {}
+    created_at: str | None = None
 
 
 class JobInfo(BaseModel):

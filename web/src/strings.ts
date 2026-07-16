@@ -35,6 +35,22 @@ export const strings = {
     upload: "+ Upload",
     uploading: "…",
     details: "Details",
+    hideDetails: "Hide",
+    detailsTitle: "Show file details",
+    hideDetailsTitle: "Hide file details",
+    meta: {
+      type: "Type",
+      size: "Size",
+      pages: "Pages",
+      dimensions: "Dimensions",
+      duration: "Duration",
+      segments: "Segments",
+      rows: "Rows",
+      sheets: "Sheets",
+      words: "Words",
+      chunks: "Chunks",
+      uploaded: "Uploaded",
+    },
     deleteTitle: "Delete",
     deleteSymbol: "×",
     noConnectors:
@@ -46,6 +62,10 @@ export const strings = {
     down: "down",
     noDocuments: "No documents yet.",
     uploadingFile: (name: string) => `uploading ${name}…`,
+    processingCount: (remaining: number, total: number) =>
+      `processing ${remaining} of ${total}…`,
+    someUploadsFailed: (count: number) =>
+      `${count} file${count === 1 ? "" : "s"} couldn't be uploaded`,
     stillProcessing: "still processing — refresh to check status",
     uploadFailed: "upload failed",
     ingestionFailed: "ingestion failed",

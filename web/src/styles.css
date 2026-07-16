@@ -117,6 +117,12 @@ input:focus { outline: 1px solid var(--ember); }
 .source-row-main input[type="checkbox"] { accent-color: var(--ember); flex-shrink: 0; }
 .source-row-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 4px; }
 .doc-title { overflow-wrap: anywhere; flex: 1; }
+.file-icon { flex-shrink: 0; color: var(--ink-dim); }
+.doc-meta { margin: 6px 0 2px 26px; }
+.doc-meta-list { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; }
+.doc-meta-row { display: contents; }
+.doc-meta-row dt { color: var(--ink-faint); font-size: 12px; }
+.doc-meta-row dd { margin: 0; font-size: 12px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .doc-error { margin: 4px 0 0; color: var(--bad); font-size: 12px; white-space: pre-wrap; font-family: var(--mono); }
 .connector-note { color: var(--ink-faint); font-size: 12px; }
 

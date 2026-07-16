@@ -52,6 +52,7 @@ class IngestionService:
                             context, user_id=user_id,
                         )
                 spans = self._chunker.chunk(doc.text)
+                doc.metadata = {**doc.metadata, "chunk_count": len(spans)}
                 batch = None
                 if spans:
                     batch = self._embedder.embed([span.text for span in spans])

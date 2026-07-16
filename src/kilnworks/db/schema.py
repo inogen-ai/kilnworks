@@ -14,8 +14,12 @@ CREATE TABLE IF NOT EXISTS documents (
     status TEXT NOT NULL DEFAULT 'pending',
     error TEXT,
     acl_tags TEXT[] NOT NULL DEFAULT '{{public}}',
+    metadata JSONB NOT NULL DEFAULT '{{}}',
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- Idempotent upgrade for installs created before `metadata` existed; existing
+-- docs carry an empty object and populate their metadata on re-ingest.
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{{}}';
 
 CREATE TABLE IF NOT EXISTS chunks (
     id UUID PRIMARY KEY,

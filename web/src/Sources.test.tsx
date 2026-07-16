@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -8,10 +8,12 @@ vi.mock("./api", async (importOriginal) => {
     ...actual,
     listDocuments: vi.fn().mockResolvedValue([]),
     listConnectors: vi.fn().mockResolvedValue([]),
+    uploadDocument: vi.fn(),
+    getJob: vi.fn(),
   };
 });
 
-import { listConnectors } from "./api";
+import { getJob, listConnectors, listDocuments, uploadDocument } from "./api";
 import Sources, { emptySelection } from "./Sources";
 import { strings } from "./strings";
 
@@ -66,5 +68,82 @@ describe("Sources — connectors", () => {
     await userEvent.click(checkbox);
 
     expect(setSelection).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("Sources — document details", () => {
+  const doc = {
+    id: "d1",
+    source_uri: "file:///data/uploads/manual.pdf",
+    title: "manual",
+    status: "ready",
+    error: null,
+    metadata: { size_bytes: 2048, page_count: 3, chunk_count: 7 },
+    created_at: "2026-07-16T14:22:00Z",
+  };
+
+  it("shows a type icon and expands metadata on Details, collapsing again on Hide", async () => {
+    vi.mocked(listDocuments).mockResolvedValueOnce([doc]);
+
+    render(
+      <Sources
+        token="tok"
+        onAuthError={vi.fn()}
+        selection={{ documentIds: new Set(["d1"]), connectorNames: new Set() }}
+        setSelection={vi.fn()}
+        onCatalogChange={vi.fn()}
+      />,
+    );
+
+    // The row renders a datatype icon (aria-hidden svg) beside the title.
+    const row = (await screen.findByText("manual")).closest("li")!;
+    expect(row.querySelector("svg.file-icon")).not.toBeNull();
+
+    // Metadata is hidden until Details is clicked.
+    expect(screen.queryByText(strings.sources.meta.pages)).toBeNull();
+
+    await userEvent.click(screen.getByRole("button", { name: strings.sources.details }));
+    expect(screen.getByText(strings.sources.meta.pages)).toBeInTheDocument();
+    expect(screen.getByText("3")).toBeInTheDocument(); // page_count
+    expect(screen.getByText("2.0 KB")).toBeInTheDocument(); // size_bytes formatted
+
+    await userEvent.click(screen.getByRole("button", { name: strings.sources.hideDetails }));
+    expect(screen.queryByText(strings.sources.meta.pages)).toBeNull();
+  });
+});
+
+describe("Sources — multiple upload", () => {
+  it("enqueues every selected file, not just the first", async () => {
+    vi.mocked(listDocuments).mockResolvedValue([]);
+    vi.mocked(uploadDocument).mockResolvedValueOnce(1).mockResolvedValueOnce(2);
+    vi.mocked(getJob).mockResolvedValue({
+      id: 0,
+      kind: "ingest",
+      status: "done",
+      attempts: 1,
+      error: null,
+    });
+
+    const { container } = render(
+      <Sources
+        token="tok"
+        onAuthError={vi.fn()}
+        selection={emptySelection}
+        setSelection={vi.fn()}
+        onCatalogChange={vi.fn()}
+      />,
+    );
+
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    expect(input).toHaveAttribute("multiple");
+
+    const a = new File(["a"], "a.md", { type: "text/markdown" });
+    const b = new File(["b"], "b.csv", { type: "text/csv" });
+    await userEvent.upload(input, [a, b], { applyAccept: false });
+
+    // Both files POST (the old single-file handler would upload only the first).
+    await waitFor(() => expect(uploadDocument).toHaveBeenCalledTimes(2));
+    expect(uploadDocument).toHaveBeenCalledWith("tok", a);
+    expect(uploadDocument).toHaveBeenCalledWith("tok", b);
   });
 });

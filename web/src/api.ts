@@ -26,6 +26,8 @@ export type DocumentInfo = {
   title: string;
   status: string;
   error: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string | null;
 };
 
 export type JobInfo = {

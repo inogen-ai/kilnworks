@@ -3,6 +3,7 @@ from uuid import UUID, uuid4
 
 import psycopg
 from pgvector import Vector
+from psycopg.types.json import Jsonb
 
 from kilnworks.core.models import (
     DOC_STATUS_FAILED,
@@ -42,13 +43,14 @@ class PgVectorStore:
 
     def upsert_document(self, doc: Document) -> UUID:
         row = self._conn.execute(
-            """INSERT INTO documents (id, source_uri, title, acl_tags)
-               VALUES (%s, %s, %s, %s)
+            """INSERT INTO documents (id, source_uri, title, acl_tags, metadata)
+               VALUES (%s, %s, %s, %s, %s)
                ON CONFLICT (source_uri) DO UPDATE
                    SET title = EXCLUDED.title, acl_tags = EXCLUDED.acl_tags,
+                       metadata = EXCLUDED.metadata,
                        status = 'pending', error = NULL
                RETURNING id""",
-            (doc.id, doc.source_uri, doc.title, doc.acl_tags),
+            (doc.id, doc.source_uri, doc.title, doc.acl_tags, Jsonb(doc.metadata)),
         ).fetchone()
         doc_id = row[0]
         self._conn.execute("DELETE FROM chunks WHERE document_id = %s", (doc_id,))
