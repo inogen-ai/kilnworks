@@ -2,6 +2,10 @@ __pycache__/
 *.pyc
 .venv/
 .env
+# Local-only Docker Compose overrides (per-machine, e.g. port remaps) — never commit
+compose.override.yaml
+compose.override.yml
+compose.port-override.yaml
 dist/
 .pytest_cache/
 .ruff_cache/
