@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type Dispatch,
+  type DragEvent as ReactDragEvent,
+  type SetStateAction,
+} from "react";
 
 import {
   ApiError,
@@ -12,7 +20,7 @@ import {
   type JobInfo,
 } from "./api";
 import FileIcon from "./FileIcon";
-import { fileKind } from "./fileType";
+import { fileKind, isSupportedFile, UPLOAD_ACCEPT } from "./fileType";
 import { metadataRows } from "./metadataView";
 import { strings } from "./strings";
 
@@ -61,8 +69,16 @@ export default function Sources({
   const [uploading, setUploading] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [openDetails, setOpenDetails] = useState<Set<string>>(new Set());
+  const [dragging, setDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const aliveRef = useRef(true);
+  // Set synchronously at the top of handleUpload so a second trigger (a drop or a
+  // picker change) in the same tick can't start an overlapping upload before the
+  // `uploading` state has re-rendered.
+  const uploadingRef = useRef(false);
+  // dragenter/dragleave fire for every child element too; count depth so the
+  // highlight only clears when the cursor truly leaves the panel.
+  const dragDepth = useRef(0);
   // Ids/names we've already applied a default-selected decision for, so a later
   // refresh doesn't re-select something the user deliberately unchecked.
   const seenDocumentsRef = useRef<Set<string>>(new Set());
@@ -72,6 +88,35 @@ export default function Sources({
     aliveRef.current = true; // re-arm on StrictMode's dev remount, not just first mount
     return () => {
       aliveRef.current = false;
+    };
+  }, []);
+
+  // A FILE dropped OUTSIDE the drop zone would otherwise make the browser navigate
+  // away (opening the file), losing the app — so neutralize stray file drags at the
+  // window. Non-file drags (e.g. dragging text into the chat input) are left alone.
+  // Also reset the highlight on any drag end/drop, covering the browser flake where
+  // a drag leaving the window fast skips the panel's dragleave and strands it.
+  useEffect(() => {
+    const isFileDrag = (event: DragEvent) =>
+      Array.from(event.dataTransfer?.types ?? []).includes("Files");
+    const swallow = (event: DragEvent) => {
+      if (isFileDrag(event)) event.preventDefault();
+    };
+    const reset = () => {
+      dragDepth.current = 0;
+      setDragging(false);
+    };
+    const onDrop = (event: DragEvent) => {
+      swallow(event);
+      reset();
+    };
+    window.addEventListener("dragover", swallow);
+    window.addEventListener("drop", onDrop);
+    window.addEventListener("dragend", reset);
+    return () => {
+      window.removeEventListener("dragover", swallow);
+      window.removeEventListener("drop", onDrop);
+      window.removeEventListener("dragend", reset);
     };
   }, []);
 
@@ -142,7 +187,8 @@ export default function Sources({
   const MAX_CONSECUTIVE_ERRORS = 4;
 
   async function handleUpload(files: File[]) {
-    if (files.length === 0) return;
+    if (files.length === 0 || uploadingRef.current) return;
+    uploadingRef.current = true;
     setUploading(true);
     // jobId -> filename for every file that enqueued successfully; POST failures
     // (the file never became a document row) are tracked separately for the summary.
@@ -228,6 +274,7 @@ export default function Sources({
       }
       setNotice(err instanceof Error ? err.message : strings.sources.uploadFailed);
     } finally {
+      uploadingRef.current = false;
       if (aliveRef.current) {
         setUploading(false);
         if (fileRef.current) fileRef.current.value = "";
@@ -295,8 +342,61 @@ export default function Sources({
     setSelection((current) => ({ ...current, connectorNames: new Set() }));
   }
 
+  function draggingFiles(event: ReactDragEvent<HTMLElement>): boolean {
+    return Array.from(event.dataTransfer?.types ?? []).includes("Files");
+  }
+
+  function handleDragEnter(event: ReactDragEvent<HTMLElement>) {
+    if (!draggingFiles(event)) return;
+    event.preventDefault();
+    dragDepth.current += 1;
+    setDragging(true);
+  }
+
+  function handleDragOver(event: ReactDragEvent<HTMLElement>) {
+    if (!draggingFiles(event)) return;
+    event.preventDefault(); // required, or the drop event never fires
+    event.dataTransfer.dropEffect = "copy";
+  }
+
+  function handleDragLeave(event: ReactDragEvent<HTMLElement>) {
+    if (!draggingFiles(event)) return;
+    event.preventDefault();
+    dragDepth.current = Math.max(0, dragDepth.current - 1);
+    if (dragDepth.current === 0) setDragging(false);
+  }
+
+  function handleDrop(event: ReactDragEvent<HTMLElement>) {
+    event.preventDefault();
+    dragDepth.current = 0;
+    setDragging(false);
+    if (uploadingRef.current) {
+      setNotice(strings.sources.uploadBusy);
+      return;
+    }
+    const dropped = Array.from(event.dataTransfer.files);
+    if (dropped.length === 0) return;
+    const supported = dropped.filter((file) => isSupportedFile(file.name));
+    if (supported.length === 0) {
+      setNotice(strings.sources.unsupportedDropped);
+      return;
+    }
+    void handleUpload(supported);
+  }
+
   return (
-    <aside className="sources">
+    <aside
+      className={`sources${dragging ? " dragging" : ""}`}
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {dragging && (
+        <div className="drop-hint" aria-hidden="true">
+          {strings.sources.dropHint}
+        </div>
+      )}
       <div className="sources-head">
         <h2>{strings.sources.documents}</h2>
         <div className="sources-actions">
@@ -318,7 +418,7 @@ export default function Sources({
           ref={fileRef}
           type="file"
           multiple
-          accept=".md,.txt,.pdf,.docx,.html,.htm,.csv,.tsv,.xlsx,.png,.jpg,.jpeg,.gif,.webp,.mp3,.wav,.m4a,.mp4,.mov"
+          accept={UPLOAD_ACCEPT}
           hidden
           onChange={(e) => {
             if (e.target.files && e.target.files.length > 0) {

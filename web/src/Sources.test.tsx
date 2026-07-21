@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -145,5 +145,63 @@ describe("Sources — multiple upload", () => {
     await waitFor(() => expect(uploadDocument).toHaveBeenCalledTimes(2));
     expect(uploadDocument).toHaveBeenCalledWith("tok", a);
     expect(uploadDocument).toHaveBeenCalledWith("tok", b);
+  });
+});
+
+describe("Sources — drag and drop", () => {
+  function drop(node: Element, files: File[]) {
+    fireEvent.drop(node, { dataTransfer: { files, types: ["Files"], dropEffect: "" } });
+  }
+
+  function renderSources() {
+    return render(
+      <Sources
+        token="tok"
+        onAuthError={vi.fn()}
+        selection={emptySelection}
+        setSelection={vi.fn()}
+        onCatalogChange={vi.fn()}
+      />,
+    );
+  }
+
+  // NOTE: jsdom dispatches `drop` unconditionally, so these tests exercise the
+  // filter → handleUpload path but can't catch a removed handleDragOver
+  // preventDefault (which would break the drop in real browsers). Real drag
+  // enabling is verified manually in the running app.
+  it("uploads only the supported files from a mixed drop", async () => {
+    vi.mocked(listDocuments).mockResolvedValue([]);
+    vi.mocked(uploadDocument).mockClear();
+    vi.mocked(uploadDocument).mockResolvedValueOnce(1);
+    vi.mocked(getJob).mockResolvedValue({
+      id: 0,
+      kind: "ingest",
+      status: "done",
+      attempts: 1,
+      error: null,
+    });
+
+    const { container } = renderSources();
+    const panel = container.querySelector("aside.sources")!;
+    const pdf = new File(["x"], "report.pdf", { type: "application/pdf" });
+    const exe = new File(["x"], "tool.exe", { type: "" });
+    drop(panel, [pdf, exe]);
+
+    await waitFor(() => expect(uploadDocument).toHaveBeenCalledWith("tok", pdf));
+    // the unsupported .exe is dropped from the batch, not uploaded
+    expect(uploadDocument).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects an all-unsupported drop with a notice and no upload", async () => {
+    vi.mocked(listDocuments).mockResolvedValue([]);
+    vi.mocked(uploadDocument).mockClear();
+
+    const { container } = renderSources();
+    const panel = container.querySelector("aside.sources")!;
+    const exe = new File(["x"], "malware.exe", { type: "" });
+    drop(panel, [exe]);
+
+    expect(await screen.findByText(strings.sources.unsupportedDropped)).toBeInTheDocument();
+    expect(uploadDocument).not.toHaveBeenCalled();
   });
 });

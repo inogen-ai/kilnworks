@@ -61,6 +61,9 @@ export const strings = {
     needsLogin: "needs login",
     down: "down",
     noDocuments: "No documents yet.",
+    dropHint: "Drop files to upload",
+    unsupportedDropped: "none of those file types are supported",
+    uploadBusy: "wait for the current upload to finish",
     uploadingFile: (name: string) => `uploading ${name}…`,
     processingCount: (remaining: number, total: number) =>
       `processing ${remaining} of ${total}…`,

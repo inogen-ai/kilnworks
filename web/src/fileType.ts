@@ -35,3 +35,15 @@ export function extensionOf(sourceUri: string): string {
 export function fileKind(sourceUri: string): { category: FileCategory; label: string } {
   return BY_EXTENSION[extensionOf(sourceUri)] ?? { category: "file", label: "File" };
 }
+
+// True for the file types Kilnworks can ingest — used to filter drag-and-dropped
+// files, which (unlike the picker) bypass the input's `accept` list.
+export function isSupportedFile(name: string): boolean {
+  return Object.hasOwn(BY_EXTENSION, extensionOf(name));
+}
+
+// The upload picker's `accept` attribute, derived from the same map that gates
+// drag-and-drop so the two lists can never drift apart.
+export const UPLOAD_ACCEPT = Object.keys(BY_EXTENSION)
+  .map((ext) => `.${ext}`)
+  .join(",");
